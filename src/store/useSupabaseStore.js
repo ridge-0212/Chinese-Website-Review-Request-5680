@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { useDatabase } from '../hooks/useDatabase'
 import supabase from '../lib/supabase'
 
 // Enhanced history store with Supabase integration
@@ -10,14 +9,12 @@ export const useSupabaseHistoryStore = create(
       entries: [],
       loading: false,
       error: null,
-      
+
       // Load history from Supabase
       loadHistory: async () => {
         set({ loading: true, error: null })
-        
         try {
           const { data: { user } } = await supabase.auth.getUser()
-          
           if (!user) {
             set({ loading: false, error: 'User not authenticated' })
             return
@@ -61,10 +58,8 @@ export const useSupabaseHistoryStore = create(
       // Add new entry to Supabase
       addEntry: async (entry) => {
         set({ loading: true, error: null })
-        
         try {
           const { data: { user } } = await supabase.auth.getUser()
-          
           if (!user) {
             set({ loading: false, error: 'User not authenticated' })
             return
@@ -125,7 +120,6 @@ export const useSupabaseHistoryStore = create(
               updated_at: new Date().toISOString()
             })
             .eq('id', user.id)
-
         } catch (error) {
           console.error('Error adding entry:', error)
           set({ loading: false, error: error.message })
@@ -135,10 +129,8 @@ export const useSupabaseHistoryStore = create(
       // Remove entry from Supabase
       removeEntry: async (id) => {
         set({ loading: true, error: null })
-        
         try {
           const { data: { user } } = await supabase.auth.getUser()
-          
           if (!user) {
             set({ loading: false, error: 'User not authenticated' })
             return
@@ -165,10 +157,8 @@ export const useSupabaseHistoryStore = create(
       // Clear all history
       clearHistory: async () => {
         set({ loading: true, error: null })
-        
         try {
           const { data: { user } } = await supabase.auth.getUser()
-          
           if (!user) {
             set({ loading: false, error: 'User not authenticated' })
             return
@@ -221,25 +211,36 @@ export const useSupabaseSettingsStore = create(
       },
       loading: false,
       error: null,
+      isInitialized: false, // 添加初始化标记
 
       // Load settings from Supabase
       loadSettings: async () => {
+        const state = get()
+        if (state.loading || state.isInitialized) {
+          console.log('Settings already loading or initialized, skipping...')
+          return
+        }
+
         set({ loading: true, error: null })
-        
         try {
           const { data: { user } } = await supabase.auth.getUser()
-          
           if (!user) {
-            set({ loading: false })
+            console.log('No user found, using local settings')
+            set({ loading: false, isInitialized: true })
             return
           }
+
+          console.log('Loading settings for user:', user.id)
 
           const { data, error } = await supabase
             .from('user_settings_rp2025')
             .select('*')
             .eq('user_id', user.id)
 
-          if (error) throw error
+          if (error) {
+            console.error('Supabase error:', error)
+            throw error
+          }
 
           // Process settings data
           const settings = {}
@@ -249,26 +250,43 @@ export const useSupabaseSettingsStore = create(
             } else if (setting.category === 'api' && setting.key === 'straico_key') {
               settings.straicoKey = setting.value
             } else if (setting.category === 'template' && setting.key === 'default_params') {
-              settings.defaultTemplateParams = { ...get().defaultTemplateParams, ...setting.value }
+              settings.defaultTemplateParams = {
+                ...get().defaultTemplateParams,
+                ...setting.value
+              }
             }
           })
 
-          set({ ...settings, loading: false })
+          console.log('Loaded settings from Supabase:', settings)
+
+          // Update local state
+          set({ 
+            ...settings, 
+            loading: false, 
+            isInitialized: true 
+          })
+
+          // Also update localStorage for immediate access
+          if (settings.visionatiKey) {
+            localStorage.setItem('visionati_api_key', settings.visionatiKey)
+          }
+          if (settings.straicoKey) {
+            localStorage.setItem('straico_api_key', settings.straicoKey)
+          }
         } catch (error) {
           console.error('Error loading settings:', error)
-          set({ loading: false, error: error.message })
+          set({ loading: false, error: error.message, isInitialized: true })
         }
       },
 
       // Save API key to Supabase
       setVisionatiKey: async (key) => {
-        set({ loading: true, error: null })
-        
         try {
           const { data: { user } } = await supabase.auth.getUser()
-          
           if (user) {
-            await supabase
+            console.log('Saving Visionati key to Supabase for user:', user.id)
+            
+            const { error } = await supabase
               .from('user_settings_rp2025')
               .upsert({
                 user_id: user.id,
@@ -277,10 +295,16 @@ export const useSupabaseSettingsStore = create(
                 value: key,
                 updated_at: new Date().toISOString()
               })
+
+            if (error) {
+              console.error('Supabase upsert error:', error)
+              throw error
+            }
+            console.log('Visionati key saved successfully')
           }
 
-          set({ visionatiKey: key, loading: false })
-          
+          set({ visionatiKey: key })
+
           // Also save to localStorage for immediate access
           if (key) {
             localStorage.setItem('visionati_api_key', key)
@@ -289,18 +313,24 @@ export const useSupabaseSettingsStore = create(
           }
         } catch (error) {
           console.error('Error saving Visionati key:', error)
-          set({ loading: false, error: error.message })
+          // Still update local state even if Supabase fails
+          set({ visionatiKey: key })
+          if (key) {
+            localStorage.setItem('visionati_api_key', key)
+          } else {
+            localStorage.removeItem('visionati_api_key')
+          }
+          throw error
         }
       },
 
       setStraicoKey: async (key) => {
-        set({ loading: true, error: null })
-        
         try {
           const { data: { user } } = await supabase.auth.getUser()
-          
           if (user) {
-            await supabase
+            console.log('Saving Straico key to Supabase for user:', user.id)
+            
+            const { error } = await supabase
               .from('user_settings_rp2025')
               .upsert({
                 user_id: user.id,
@@ -309,10 +339,16 @@ export const useSupabaseSettingsStore = create(
                 value: key,
                 updated_at: new Date().toISOString()
               })
+
+            if (error) {
+              console.error('Supabase upsert error:', error)
+              throw error
+            }
+            console.log('Straico key saved successfully')
           }
 
-          set({ straicoKey: key, loading: false })
-          
+          set({ straicoKey: key })
+
           // Also save to localStorage for immediate access
           if (key) {
             localStorage.setItem('straico_api_key', key)
@@ -321,19 +357,23 @@ export const useSupabaseSettingsStore = create(
           }
         } catch (error) {
           console.error('Error saving Straico key:', error)
-          set({ loading: false, error: error.message })
+          // Still update local state even if Supabase fails
+          set({ straicoKey: key })
+          if (key) {
+            localStorage.setItem('straico_api_key', key)
+          } else {
+            localStorage.removeItem('straico_api_key')
+          }
+          throw error
         }
       },
 
       // Save template parameters to Supabase
       setDefaultTemplateParams: async (params) => {
-        set({ loading: true, error: null })
-        
         try {
           const { data: { user } } = await supabase.auth.getUser()
-          
           if (user) {
-            await supabase
+            const { error } = await supabase
               .from('user_settings_rp2025')
               .upsert({
                 user_id: user.id,
@@ -342,20 +382,40 @@ export const useSupabaseSettingsStore = create(
                 value: params,
                 updated_at: new Date().toISOString()
               })
+
+            if (error) throw error
           }
 
-          set({ defaultTemplateParams: params, loading: false })
+          set({ defaultTemplateParams: params })
         } catch (error) {
           console.error('Error saving template params:', error)
-          set({ loading: false, error: error.message })
+          // Still update local state even if Supabase fails
+          set({ defaultTemplateParams: params })
+          throw error
         }
       },
 
       // Initialize from localStorage (for offline access)
       initializeFromStorage: () => {
+        const state = get()
+        if (state.isInitialized) {
+          console.log('Settings already initialized from storage, skipping...')
+          return
+        }
+
         const visionatiKey = localStorage.getItem('visionati_api_key') || ''
         const straicoKey = localStorage.getItem('straico_api_key') || ''
-        set({ visionatiKey, straicoKey })
+        set({ 
+          visionatiKey, 
+          straicoKey, 
+          isInitialized: true 
+        })
+        console.log('Initialized settings from localStorage')
+      },
+
+      // Reset initialization state (for debugging)
+      resetInitialization: () => {
+        set({ isInitialized: false })
       }
     }),
     {

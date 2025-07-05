@@ -10,12 +10,14 @@ import { useSettingsStore } from '../store/useStore';
 import { copyPrompt } from '../utils/clipboard';
 import toast from 'react-hot-toast';
 
-const {
-  FiUpload, FiImage, FiVideo, FiLink, FiLoader, FiCheck, FiX, FiEye, FiTag, FiPalette,
-  FiSettings, FiCpu, FiZap, FiCopy, FiRefreshCw, FiEdit3, FiMessageSquare, FiShoppingBag
+const { 
+  FiUpload, FiImage, FiVideo, FiLink, FiLoader, FiCheck, FiX, FiEye, FiTag, 
+  FiPalette, FiSettings, FiCpu, FiZap, FiCopy, FiRefreshCw, FiEdit3, 
+  FiMessageSquare, FiShoppingBag 
 } = FiIcons;
 
-const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
+const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => {
+  // 添加 mode 属性
   const [analysisMode, setAnalysisMode] = useState('upload');
   const [file, setFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
@@ -29,7 +31,7 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
   const [showPromptGenerator, setShowPromptGenerator] = useState(false);
   const [showManualPrompt, setShowManualPrompt] = useState(false);
   const [showVisionatiPrompt, setShowVisionatiPrompt] = useState(false);
-  
+
   // 新增：产品内容生成相关状态
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showCustomInstructions, setShowCustomInstructions] = useState(false);
@@ -66,6 +68,7 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
   });
 
   const { straicoKey, defaultTemplateParams } = useSettingsStore();
+
   const visionatiService = apiKey ? new VisionatiService(apiKey) : null;
   const straicoService = straicoKey ? new StraicoService(straicoKey) : null;
   const productContentService = straicoKey ? new ProductContentService(straicoKey) : null;
@@ -98,7 +101,7 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
         setShowAdvanced(settings.showAdvanced || false);
         setShowManualPrompt(settings.showManualPrompt || false);
         setShowVisionatiPrompt(settings.showVisionatiPrompt || false);
-        
+
         // 新增：加载产品内容生成设置
         setShowModelSelector(settings.showModelSelector || false);
         setShowCustomInstructions(settings.showCustomInstructions || false);
@@ -110,7 +113,7 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
           ...settings.productParams,
           language: 'English'
         }));
-        
+
         console.log('Loaded saved advanced analysis settings:', settings);
       } catch (error) {
         console.error('Error loading saved settings:', error);
@@ -140,6 +143,7 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
       contentType,
       productParams
     };
+
     const settingsKey = mode === 'product' ? 'advanced_product_analysis_settings' : 'advanced_analysis_settings';
     localStorage.setItem(settingsKey, JSON.stringify(settings));
     console.log('Saved advanced analysis settings:', settings);
@@ -209,8 +213,8 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
 
   // Popular languages
   const languages = [
-    'English', 'Chinese', 'Spanish', 'French', 'German', 'Italian', 'Portuguese',
-    'Russian', 'Japanese', 'Korean', 'Arabic', 'Hindi', 'Dutch', 'Swedish',
+    'English', 'Chinese', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 
+    'Russian', 'Japanese', 'Korean', 'Arabic', 'Hindi', 'Dutch', 'Swedish', 
     'Norwegian', 'Danish', 'Finnish'
   ];
 
@@ -222,23 +226,23 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
       'Automotive', 'Pet Supplies', 'Office Supplies', 'Jewelry', 'Tools & Hardware'
     ],
     targetAudience: [
-      'General', 'Men', 'Women', 'Kids', 'Teens', 'Young Adults',
-      'Professionals', 'Seniors', 'Students', 'Parents', 'Tech Enthusiasts', 'Fashion Lovers'
+      'General', 'Men', 'Women', 'Kids', 'Teens', 'Young Adults', 'Professionals',
+      'Seniors', 'Students', 'Parents', 'Tech Enthusiasts', 'Fashion Lovers'
     ],
     platform: [
-      'General', 'Amazon', 'eBay', 'Shopify', 'Etsy', 'Taobao', 'Tmall',
-      'JD.com', 'Pinduoduo', 'WeChat Store', 'Douyin Shop', 'Xiaohongshu'
+      'General', 'Amazon', 'eBay', 'Shopify', 'Etsy', 'Taobao', 'Tmall', 'JD.com',
+      'Pinduoduo', 'WeChat Store', 'Douyin Shop', 'Xiaohongshu'
     ],
     tone: [
-      'Professional', 'Friendly', 'Enthusiastic', 'Luxury', 'Casual',
-      'Technical', 'Emotional', 'Urgent', 'Trustworthy', 'Innovative'
+      'Professional', 'Friendly', 'Enthusiastic', 'Luxury', 'Casual', 'Technical',
+      'Emotional', 'Urgent', 'Trustworthy', 'Innovative'
     ],
     priceRange: [
       'Budget', 'Mid-range', 'Premium', 'Luxury'
     ],
     brandStyle: [
-      'Modern', 'Classic', 'Minimalist', 'Bold', 'Elegant',
-      'Playful', 'Professional', 'Trendy', 'Vintage', 'Tech-forward'
+      'Modern', 'Classic', 'Minimalist', 'Bold', 'Elegant', 'Playful',
+      'Professional', 'Trendy', 'Vintage', 'Tech-forward'
     ]
   };
 
@@ -457,7 +461,11 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
           ...defaultTemplateParams,
           manualPrompt: manualPrompt
         };
-        prompts = await straicoService.generatePrompts(results.description, templateParams, selectedModel);
+        prompts = await straicoService.generatePrompts(
+          results.description,
+          templateParams,
+          selectedModel
+        );
       }
 
       setGeneratedPrompts(prompts);
@@ -467,8 +475,8 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
         window.updateUserStats('total_prompts', prompts.length);
       }
 
-      const contentType = mode === 'product' ? '产品内容' : 'AI 艺术提示词';
-      toast.success(`生成了 ${prompts.length} 个${contentType}！`);
+      const contentType_var = mode === 'product' ? '产品内容' : 'AI 艺术提示词';
+      toast.success(`生成了 ${prompts.length} 个${contentType_var}！`);
     } catch (err) {
       console.error('内容生成错误:', err);
       setError(err.message);
@@ -621,7 +629,11 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
               {asset.nsfw.map((item, index) => (
                 <div key={index} className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">{item.label}</span>
-                  <span className={`text-sm font-medium ${item.label === 'sfw' || item.label === 'safe' ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`text-sm font-medium ${
+                    item.label === 'sfw' || item.label === 'safe' 
+                      ? 'text-green-600' 
+                      : 'text-red-600'
+                  }`}>
                     {item.score ? `${(item.score * 100).toFixed(1)}%` : item.likelihood}
                   </span>
                 </div>
@@ -912,9 +924,15 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
 
           {/* Analysis status indicator */}
           <div className="flex items-center space-x-2 text-sm">
-            <SafeIcon icon={visionatiPrompt.trim() ? FiCheck : FiMessageSquare} className={`h-4 w-4 ${visionatiPrompt.trim() ? 'text-green-600' : 'text-gray-400'}`} />
+            <SafeIcon
+              icon={visionatiPrompt.trim() ? FiCheck : FiMessageSquare}
+              className={`h-4 w-4 ${visionatiPrompt.trim() ? 'text-green-600' : 'text-gray-400'}`}
+            />
             <span className={visionatiPrompt.trim() ? 'text-green-700' : 'text-gray-500'}>
-              {visionatiPrompt.trim() ? 'Custom analysis prompt configured' : 'Using default analysis (click to customize)'}
+              {visionatiPrompt.trim()
+                ? 'Custom analysis prompt configured'
+                : 'Using default analysis (click to customize)'
+              }
             </span>
           </div>
         </div>
@@ -1000,7 +1018,7 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
                   <SafeIcon icon={FiMessageSquare} className="h-4 w-4 text-purple-600" />
                   <h4 className="font-medium text-gray-900">自定义生成指令 (Product Content)</h4>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     生成风格和要求 (英文)
@@ -1129,7 +1147,6 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
                       ))}
                     </select>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       目标受众
@@ -1146,7 +1163,6 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
                       ))}
                     </select>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       销售平台
@@ -1163,7 +1179,6 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
                       ))}
                     </select>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       语调风格
@@ -1216,10 +1231,13 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
                 {mode === 'product' ? 'Product Content Generation Instructions' : 'Prompt Generation Instructions'}
               </h4>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {mode === 'product' ? 'Custom Instructions for Product Content Generation' : 'Custom Instructions for Final Prompt Generation'}
+                {mode === 'product'
+                  ? 'Custom Instructions for Product Content Generation'
+                  : 'Custom Instructions for Final Prompt Generation'
+                }
               </label>
               <textarea
                 value={manualPrompt}
@@ -1513,14 +1531,14 @@ const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
                   <p className="text-sm text-green-700">{selectedModel}</p>
                 </div>
               )}
-              
+
               {productParams.customInstructions?.trim() && (
                 <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
                   <h5 className="text-sm font-medium text-purple-900 mb-1">Generation Style:</h5>
                   <p className="text-sm text-purple-700">{productParams.customInstructions}</p>
                 </div>
               )}
-              
+
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <h5 className="text-sm font-medium text-blue-900 mb-1">Content Settings:</h5>
                 <div className="text-sm text-blue-700 grid grid-cols-2 gap-2">

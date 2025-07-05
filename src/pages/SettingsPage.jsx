@@ -8,17 +8,18 @@ import { useSupabaseSettingsStore } from '../store/useSupabaseStore'
 import { useAuth } from '../hooks/useAuth'
 import toast from 'react-hot-toast'
 
-const { FiSettings, FiKey, FiZap, FiCheck, FiX, FiRefreshCw, FiCloud, FiHardDrive } = FiIcons
+const { FiSettings, FiKey, FiZap, FiCheck, FiX, FiRefreshCw, FiCloud, FiHardDrive, FiUpload, FiDownload } = FiIcons
 
 const SettingsPage = () => {
   const { user } = useAuth()
-  
+
   // Always call all hooks first
   const supabaseStore = useSupabaseSettingsStore()
   const localStore = useSettingsStore()
-  
+
   // Then select which store to use
   const settingsStore = user ? supabaseStore : localStore
+
   const { visionatiKey, straicoKey, setVisionatiKey, setStraicoKey, loading } = settingsStore
 
   const [connectionStatus, setConnectionStatus] = useState({
@@ -29,13 +30,42 @@ const SettingsPage = () => {
     visionati: false,
     straico: false
   })
+  const [isInitializing, setIsInitializing] = useState(true)
 
+  // Initialize settings only once
   useEffect(() => {
-    // Load settings for authenticated users
-    if (user && settingsStore.loadSettings) {
-      settingsStore.loadSettings()
+    let mounted = true
+    
+    const initializeSettings = async () => {
+      try {
+        console.log('SettingsPage: Initializing settings...')
+        setIsInitializing(true)
+        
+        if (user && settingsStore.loadSettings && !settingsStore.isInitialized) {
+          console.log('SettingsPage: Loading settings for authenticated user...')
+          await settingsStore.loadSettings()
+        } else if (!user && settingsStore.initializeFromStorage && !settingsStore.isInitialized) {
+          console.log('SettingsPage: Initializing settings from localStorage...')
+          settingsStore.initializeFromStorage()
+        }
+        
+        if (mounted) {
+          setIsInitializing(false)
+        }
+      } catch (error) {
+        console.error('SettingsPage: Error initializing settings:', error)
+        if (mounted) {
+          setIsInitializing(false)
+        }
+      }
     }
-  }, [user, settingsStore])
+
+    initializeSettings()
+    
+    return () => {
+      mounted = false
+    }
+  }, [user]) // 只依赖 user
 
   useEffect(() => {
     // Check connection status
@@ -53,19 +83,31 @@ const SettingsPage = () => {
   }, [visionatiKey, straicoKey])
 
   const handleKeysChange = async (keys) => {
-    // Use async methods for authenticated users
-    if (user) {
-      await setVisionatiKey(keys.visionati)
-      await setStraicoKey(keys.straico)
-    } else {
-      setVisionatiKey(keys.visionati)
-      setStraicoKey(keys.straico)
+    try {
+      // Use async methods for authenticated users
+      if (user) {
+        if (keys.visionati !== visionatiKey) {
+          await setVisionatiKey(keys.visionati)
+        }
+        if (keys.straico !== straicoKey) {
+          await setStraicoKey(keys.straico)
+        }
+      } else {
+        if (keys.visionati !== visionatiKey) {
+          setVisionatiKey(keys.visionati)
+        }
+        if (keys.straico !== straicoKey) {
+          setStraicoKey(keys.straico)
+        }
+      }
+    } catch (error) {
+      console.error('Error saving keys in SettingsPage:', error)
+      // Keys are already saved by ApiKeyManager, so we don't need to show error here
     }
   }
 
   const testConnection = async (service) => {
     setTesting(prev => ({ ...prev, [service]: true }))
-    
     try {
       // 模拟 API 测试 - 在真实应用中，您会进行实际的 API 调用
       await new Promise(resolve => setTimeout(resolve, 1500))
@@ -77,6 +119,61 @@ const SettingsPage = () => {
     } finally {
       setTesting(prev => ({ ...prev, [service]: false }))
     }
+  }
+
+  // Export settings to file
+  const exportSettings = () => {
+    const settings = {
+      visionatiKey,
+      straicoKey,
+      exportDate: new Date().toISOString(),
+      version: '1.0'
+    }
+
+    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `repromp-settings-${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+
+    toast.success('设置已导出到文件！')
+  }
+
+  // Import settings from file
+  const importSettings = (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      try {
+        const settings = JSON.parse(e.target.result)
+        
+        if (settings.visionatiKey || settings.straicoKey) {
+          if (user) {
+            await setVisionatiKey(settings.visionatiKey || '')
+            await setStraicoKey(settings.straicoKey || '')
+          } else {
+            setVisionatiKey(settings.visionatiKey || '')
+            setStraicoKey(settings.straicoKey || '')
+          }
+          toast.success('设置导入成功！')
+        } else {
+          toast.error('导入文件格式无效')
+        }
+      } catch (error) {
+        console.error('Import error:', error)
+        toast.error('导入设置失败')
+      }
+    }
+    reader.readAsText(file)
+    
+    // Reset input
+    event.target.value = ''
   }
 
   const getStatusColor = (status) => {
@@ -101,6 +198,17 @@ const SettingsPage = () => {
       case 'error': return FiX
       default: return FiX
     }
+  }
+
+  if (isInitializing) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center justify-center py-12">
+          <SafeIcon icon={FiIcons.FiLoader} className="h-8 w-8 animate-spin text-blue-600 mr-3" />
+          <span className="text-gray-600">初始化设置中...</span>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -128,6 +236,41 @@ const SettingsPage = () => {
         )}
       </div>
 
+      {/* 导入/导出设置 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2">
+            <SafeIcon icon={FiSettings} className="h-5 w-5 text-gray-600" />
+            <h3 className="font-semibold text-gray-900">备份与恢复</h3>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            onClick={exportSettings}
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors border border-blue-200"
+          >
+            <SafeIcon icon={FiDownload} className="h-4 w-4" />
+            <span>导出设置到文件</span>
+          </button>
+          
+          <label className="flex items-center justify-center space-x-2 px-4 py-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors border border-green-200 cursor-pointer">
+            <SafeIcon icon={FiUpload} className="h-4 w-4" />
+            <span>从文件导入设置</span>
+            <input
+              type="file"
+              accept=".json"
+              onChange={importSettings}
+              className="hidden"
+            />
+          </label>
+        </div>
+        
+        <p className="text-xs text-gray-500 mt-3">
+          💡 提示：可以导出设置文件作为备份，或在其他设备上导入使用
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* API 配置 */}
         <div className="lg:col-span-2">
@@ -147,10 +290,7 @@ const SettingsPage = () => {
                 disabled={testing.visionati}
                 className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors disabled:opacity-50"
               >
-                <SafeIcon 
-                  icon={testing.visionati ? FiIcons.FiLoader : FiRefreshCw} 
-                  className={`h-4 w-4 ${testing.visionati ? 'animate-spin' : ''}`} 
-                />
+                <SafeIcon icon={testing.visionati ? FiIcons.FiLoader : FiRefreshCw} className={`h-4 w-4 ${testing.visionati ? 'animate-spin' : ''}`} />
                 <span>测试</span>
               </button>
             )}
@@ -166,10 +306,7 @@ const SettingsPage = () => {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">连接状态</span>
               <div className="flex items-center space-x-2">
-                <SafeIcon 
-                  icon={getStatusIcon(connectionStatus.visionati)} 
-                  className={`h-4 w-4 ${getStatusColor(connectionStatus.visionati)}`} 
-                />
+                <SafeIcon icon={getStatusIcon(connectionStatus.visionati)} className={`h-4 w-4 ${getStatusColor(connectionStatus.visionati)}`} />
                 <span className={`text-sm font-medium ${getStatusColor(connectionStatus.visionati)}`}>
                   {getStatusText(connectionStatus.visionati)}
                 </span>
@@ -184,10 +321,7 @@ const SettingsPage = () => {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">存储</span>
               <div className="flex items-center space-x-1">
-                <SafeIcon 
-                  icon={user ? FiCloud : FiHardDrive} 
-                  className={`h-3 w-3 ${user ? 'text-blue-600' : 'text-gray-600'}`} 
-                />
+                <SafeIcon icon={user ? FiCloud : FiHardDrive} className={`h-3 w-3 ${user ? 'text-blue-600' : 'text-gray-600'}`} />
                 <span className={`text-sm font-medium ${user ? 'text-blue-600' : 'text-gray-600'}`}>
                   {user ? '云端' : '本地'}
                 </span>
@@ -209,10 +343,7 @@ const SettingsPage = () => {
                 disabled={testing.straico}
                 className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors disabled:opacity-50"
               >
-                <SafeIcon 
-                  icon={testing.straico ? FiIcons.FiLoader : FiRefreshCw} 
-                  className={`h-4 w-4 ${testing.straico ? 'animate-spin' : ''}`} 
-                />
+                <SafeIcon icon={testing.straico ? FiIcons.FiLoader : FiRefreshCw} className={`h-4 w-4 ${testing.straico ? 'animate-spin' : ''}`} />
                 <span>测试</span>
               </button>
             )}
@@ -228,10 +359,7 @@ const SettingsPage = () => {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">连接状态</span>
               <div className="flex items-center space-x-2">
-                <SafeIcon 
-                  icon={getStatusIcon(connectionStatus.straico)} 
-                  className={`h-4 w-4 ${getStatusColor(connectionStatus.straico)}`} 
-                />
+                <SafeIcon icon={getStatusIcon(connectionStatus.straico)} className={`h-4 w-4 ${getStatusColor(connectionStatus.straico)}`} />
                 <span className={`text-sm font-medium ${getStatusColor(connectionStatus.straico)}`}>
                   {getStatusText(connectionStatus.straico)}
                 </span>
@@ -246,10 +374,7 @@ const SettingsPage = () => {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">存储</span>
               <div className="flex items-center space-x-1">
-                <SafeIcon 
-                  icon={user ? FiCloud : FiHardDrive} 
-                  className={`h-3 w-3 ${user ? 'text-blue-600' : 'text-gray-600'}`} 
-                />
+                <SafeIcon icon={user ? FiCloud : FiHardDrive} className={`h-3 w-3 ${user ? 'text-blue-600' : 'text-gray-600'}`} />
                 <span className={`text-sm font-medium ${user ? 'text-blue-600' : 'text-gray-600'}`}>
                   {user ? '云端' : '本地'}
                 </span>
@@ -283,6 +408,7 @@ const SettingsPage = () => {
               </p>
             </div>
           </div>
+
           <div className="flex items-start space-x-3">
             <span className="bg-blue-200 text-blue-800 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">
               2
@@ -303,6 +429,7 @@ const SettingsPage = () => {
               </p>
             </div>
           </div>
+
           <div className="flex items-start space-x-3">
             <span className="bg-blue-200 text-blue-800 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">
               3
@@ -314,6 +441,7 @@ const SettingsPage = () => {
               </p>
             </div>
           </div>
+
           <div className="flex items-start space-x-3">
             <span className="bg-blue-200 text-blue-800 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">
               4
@@ -325,6 +453,7 @@ const SettingsPage = () => {
               </p>
             </div>
           </div>
+
           {user && (
             <div className="flex items-start space-x-3">
               <span className="bg-blue-200 text-blue-800 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">
@@ -336,7 +465,21 @@ const SettingsPage = () => {
                   您的设置和历史记录将自动保存到云端，在任何设备上都可以访问。
                 </p>
               </div>
+            </div>
+          )}
+
+          {!user && (
+            <div className="flex items-start space-x-3">
+              <span className="bg-yellow-200 text-yellow-800 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">
+                !
+              </span>
+              <div>
+                <p className="font-medium">推荐：注册账户</p>
+                <p className="text-blue-700">
+                  注册账户可以享受云端同步功能，您的 API 密钥和设置将在所有设备间同步，再也不用担心换浏览器丢失配置！
+                </p>
               </div>
+            </div>
           )}
         </div>
       </div>
@@ -346,7 +489,7 @@ const SettingsPage = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 flex items-center space-x-3">
             <SafeIcon icon={FiIcons.FiLoader} className="h-6 w-6 animate-spin text-blue-600" />
-            <span className="text-gray-900">正在保存设置...</span>
+            <span className="text-gray-900">正在{user ? '同步到云端' : '保存设置'}...</span>
           </div>
         </div>
       )}
