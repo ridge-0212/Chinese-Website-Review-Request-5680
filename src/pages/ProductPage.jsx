@@ -80,13 +80,14 @@ const ProductPage = () => {
       // Log API usage start
       const apiStartTime = Date.now()
 
-      // Use e-commerce specific analysis settings
+      // Use e-commerce specific analysis settings with English output
       const result = await visionatiService.analyzeImage({
         file: file,
         features: ['tags', 'descriptions', 'colors', 'brands', 'texts'],
         backends: ['openai', 'googlevision', 'clarifai'],
         role: 'ecommerce', // Specific role for e-commerce
-        language: 'Chinese'
+        language: 'English', // 修改为英文输出
+        prompt: 'Analyze this product image and provide detailed descriptions in English focusing on e-commerce product features, benefits, and selling points suitable for online marketplace listings.'
       })
 
       // Log API usage
@@ -101,7 +102,8 @@ const ProductPage = () => {
           requestData: {
             features: ['tags', 'descriptions', 'colors', 'brands', 'texts'],
             backends: ['openai', 'googlevision', 'clarifai'],
-            role: 'ecommerce'
+            role: 'ecommerce',
+            language: 'English'
           },
           responseData: {
             credits_paid: result.credits_paid,
@@ -218,7 +220,21 @@ const ProductPage = () => {
           contentType: 'product' // Mark as product content
         }
 
-        await addEntry(historyEntry)
+        // 修复 addEntry 函数调用错误
+        if (typeof addEntry === 'function') {
+          await addEntry(historyEntry)
+        } else {
+          console.warn('addEntry is not a function, storing locally instead')
+          // 如果 addEntry 不是函数，则存储到本地 localStorage
+          const existingHistory = JSON.parse(localStorage.getItem('product_history') || '[]')
+          const newEntry = {
+            ...historyEntry,
+            id: Date.now().toString(),
+            createdAt: new Date().toISOString()
+          }
+          existingHistory.unshift(newEntry)
+          localStorage.setItem('product_history', JSON.stringify(existingHistory.slice(0, 50))) // 只保留最近50条
+        }
 
         // Update user stats
         if (window.updateUserStats) {
@@ -282,7 +298,7 @@ const ProductPage = () => {
           电商产品内容生成器
         </h1>
         <p className="text-gray-600">
-          上传产品图像，自动生成专业的电商产品标题和描述
+          上传产品图像，自动生成专业的电商产品标题和描述（英文输出）
         </p>
         {user && (
           <p className="text-sm text-blue-600 mt-2">
@@ -363,7 +379,7 @@ const ProductPage = () => {
             </div>
           </div>
         ) : (
-          <ImageAnalyzer apiKey={visionatiKey} />
+          <ImageAnalyzer apiKey={visionatiKey} mode="product" />
         )}
       </div>
 
@@ -390,6 +406,7 @@ const ProductPage = () => {
           <p>正在分析: {isAnalyzing ? '是' : '否'}</p>
           <p>正在生成: {isGenerating ? '是' : '否'}</p>
           <p>使用存储: {user ? 'Supabase' : 'Local'}</p>
+          <p>addEntry 函数类型: {typeof addEntry}</p>
         </div>
       )}
     </div>

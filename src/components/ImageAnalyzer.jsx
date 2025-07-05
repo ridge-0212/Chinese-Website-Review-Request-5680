@@ -4,13 +4,18 @@ import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../common/SafeIcon';
 import VisionatiService from '../services/visionatiService';
 import StraicoService from '../services/straicoService';
+import ProductContentService from '../services/productContentService';
+import ModelSelector from './ModelSelector';
 import { useSettingsStore } from '../store/useStore';
 import { copyPrompt } from '../utils/clipboard';
 import toast from 'react-hot-toast';
 
-const { FiUpload, FiImage, FiVideo, FiLink, FiLoader, FiCheck, FiX, FiEye, FiTag, FiPalette, FiSettings, FiCpu, FiZap, FiCopy, FiRefreshCw, FiEdit3, FiMessageSquare } = FiIcons;
+const {
+  FiUpload, FiImage, FiVideo, FiLink, FiLoader, FiCheck, FiX, FiEye, FiTag, FiPalette,
+  FiSettings, FiCpu, FiZap, FiCopy, FiRefreshCw, FiEdit3, FiMessageSquare, FiShoppingBag
+} = FiIcons;
 
-const ImageAnalyzer = ({ apiKey }) => {
+const ImageAnalyzer = ({ apiKey, mode = 'prompt' }) => { // 添加 mode 属性
   const [analysisMode, setAnalysisMode] = useState('upload');
   const [file, setFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
@@ -24,12 +29,19 @@ const ImageAnalyzer = ({ apiKey }) => {
   const [showPromptGenerator, setShowPromptGenerator] = useState(false);
   const [showManualPrompt, setShowManualPrompt] = useState(false);
   const [showVisionatiPrompt, setShowVisionatiPrompt] = useState(false);
+  
+  // 新增：产品内容生成相关状态
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const [showCustomInstructions, setShowCustomInstructions] = useState(false);
+  const [showProductParams, setShowProductParams] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(null);
+  const [contentType, setContentType] = useState('both');
 
   // Analysis configuration with localStorage persistence
   const [selectedFeatures, setSelectedFeatures] = useState(['tags', 'descriptions', 'colors', 'nsfw']);
   const [selectedBackends, setSelectedBackends] = useState(['openai', 'googlevision', 'clarifai']);
-  const [selectedRole, setSelectedRole] = useState('general');
-  const [language, setLanguage] = useState('English');
+  const [selectedRole, setSelectedRole] = useState(mode === 'product' ? 'ecommerce' : 'general');
+  const [language, setLanguage] = useState(mode === 'product' ? 'English' : 'English');
   const [tagScore, setTagScore] = useState(0.85);
   const [customPrompt, setCustomPrompt] = useState('');
 
@@ -39,35 +51,72 @@ const ImageAnalyzer = ({ apiKey }) => {
   // Manual prompt configuration
   const [manualPrompt, setManualPrompt] = useState('');
 
-  const { straicoKey, defaultTemplateParams } = useSettingsStore();
+  // 新增：产品内容生成参数
+  const [productParams, setProductParams] = useState({
+    category: 'General',
+    targetAudience: 'General',
+    platform: 'General',
+    tone: 'Professional',
+    language: 'English',
+    priceRange: 'Mid-range',
+    brandStyle: 'Modern',
+    keyFeatures: '',
+    manualPrompt: '',
+    customInstructions: ''
+  });
 
+  const { straicoKey, defaultTemplateParams } = useSettingsStore();
   const visionatiService = apiKey ? new VisionatiService(apiKey) : null;
   const straicoService = straicoKey ? new StraicoService(straicoKey) : null;
+  const productContentService = straicoKey ? new ProductContentService(straicoKey) : null;
+
+  // 根据模式设置默认值
+  useEffect(() => {
+    if (mode === 'product') {
+      setSelectedRole('ecommerce');
+      setLanguage('English');
+      setSelectedFeatures(['tags', 'descriptions', 'colors', 'brands', 'texts']);
+      setVisionatiPrompt('Analyze this product image and provide detailed descriptions in English focusing on e-commerce product features, benefits, and selling points suitable for online marketplace listings.');
+    }
+  }, [mode]);
 
   // Load saved settings on component mount
   useEffect(() => {
-    const savedSettings = localStorage.getItem('advanced_analysis_settings');
+    const settingsKey = mode === 'product' ? 'advanced_product_analysis_settings' : 'advanced_analysis_settings';
+    const savedSettings = localStorage.getItem(settingsKey);
     if (savedSettings) {
       try {
         const settings = JSON.parse(savedSettings);
-        setSelectedFeatures(settings.selectedFeatures || ['tags', 'descriptions', 'colors', 'nsfw']);
+        setSelectedFeatures(settings.selectedFeatures || (mode === 'product' ? ['tags', 'descriptions', 'colors', 'brands', 'texts'] : ['tags', 'descriptions', 'colors', 'nsfw']));
         setSelectedBackends(settings.selectedBackends || ['openai', 'googlevision', 'clarifai']);
-        setSelectedRole(settings.selectedRole || 'general');
+        setSelectedRole(settings.selectedRole || (mode === 'product' ? 'ecommerce' : 'general'));
         setLanguage(settings.language || 'English');
         setTagScore(settings.tagScore || 0.85);
         setCustomPrompt(settings.customPrompt || '');
-        setVisionatiPrompt(settings.visionatiPrompt || '');
+        setVisionatiPrompt(settings.visionatiPrompt || (mode === 'product' ? 'Analyze this product image and provide detailed descriptions in English focusing on e-commerce product features, benefits, and selling points suitable for online marketplace listings.' : ''));
         setManualPrompt(settings.manualPrompt || '');
         setShowAdvanced(settings.showAdvanced || false);
         setShowManualPrompt(settings.showManualPrompt || false);
         setShowVisionatiPrompt(settings.showVisionatiPrompt || false);
+        
+        // 新增：加载产品内容生成设置
+        setShowModelSelector(settings.showModelSelector || false);
+        setShowCustomInstructions(settings.showCustomInstructions || false);
+        setShowProductParams(settings.showProductParams || false);
+        setSelectedModel(settings.selectedModel || null);
+        setContentType(settings.contentType || 'both');
+        setProductParams(prev => ({
+          ...prev,
+          ...settings.productParams,
+          language: 'English'
+        }));
         
         console.log('Loaded saved advanced analysis settings:', settings);
       } catch (error) {
         console.error('Error loading saved settings:', error);
       }
     }
-  }, []);
+  }, [mode]);
 
   // Save settings whenever they change
   const saveSettings = useCallback(() => {
@@ -82,17 +131,40 @@ const ImageAnalyzer = ({ apiKey }) => {
       manualPrompt,
       showAdvanced,
       showManualPrompt,
-      showVisionatiPrompt
+      showVisionatiPrompt,
+      // 新增：保存产品内容生成设置
+      showModelSelector,
+      showCustomInstructions,
+      showProductParams,
+      selectedModel,
+      contentType,
+      productParams
     };
-    
-    localStorage.setItem('advanced_analysis_settings', JSON.stringify(settings));
+    const settingsKey = mode === 'product' ? 'advanced_product_analysis_settings' : 'advanced_analysis_settings';
+    localStorage.setItem(settingsKey, JSON.stringify(settings));
     console.log('Saved advanced analysis settings:', settings);
-  }, [selectedFeatures, selectedBackends, selectedRole, language, tagScore, customPrompt, visionatiPrompt, manualPrompt, showAdvanced, showManualPrompt, showVisionatiPrompt]);
+  }, [
+    selectedFeatures, selectedBackends, selectedRole, language, tagScore, customPrompt,
+    visionatiPrompt, manualPrompt, showAdvanced, showManualPrompt, showVisionatiPrompt,
+    showModelSelector, showCustomInstructions, showProductParams, selectedModel,
+    contentType, productParams, mode
+  ]);
 
   // Save settings whenever any setting changes
   useEffect(() => {
     saveSettings();
   }, [saveSettings]);
+
+  // 新增：处理产品参数变化
+  const handleProductParamChange = (key, value) => {
+    const newParams = { ...productParams, [key]: value };
+    setProductParams(newParams);
+  };
+
+  // 新增：处理模型选择
+  const handleModelSelect = (modelId) => {
+    setSelectedModel(modelId);
+  };
 
   // Available features
   const features = [
@@ -137,17 +209,72 @@ const ImageAnalyzer = ({ apiKey }) => {
 
   // Popular languages
   const languages = [
-    'English', 'Chinese', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Russian', 'Japanese', 'Korean', 'Arabic', 'Hindi', 'Dutch', 'Swedish', 'Norwegian', 'Danish', 'Finnish'
+    'English', 'Chinese', 'Spanish', 'French', 'German', 'Italian', 'Portuguese',
+    'Russian', 'Japanese', 'Korean', 'Arabic', 'Hindi', 'Dutch', 'Swedish',
+    'Norwegian', 'Danish', 'Finnish'
   ];
 
+  // 新增：产品参数选项
+  const paramOptions = {
+    category: [
+      'General', 'Fashion', 'Electronics', 'Home & Garden', 'Beauty & Health',
+      'Sports & Outdoors', 'Toys & Games', 'Books & Media', 'Food & Beverages',
+      'Automotive', 'Pet Supplies', 'Office Supplies', 'Jewelry', 'Tools & Hardware'
+    ],
+    targetAudience: [
+      'General', 'Men', 'Women', 'Kids', 'Teens', 'Young Adults',
+      'Professionals', 'Seniors', 'Students', 'Parents', 'Tech Enthusiasts', 'Fashion Lovers'
+    ],
+    platform: [
+      'General', 'Amazon', 'eBay', 'Shopify', 'Etsy', 'Taobao', 'Tmall',
+      'JD.com', 'Pinduoduo', 'WeChat Store', 'Douyin Shop', 'Xiaohongshu'
+    ],
+    tone: [
+      'Professional', 'Friendly', 'Enthusiastic', 'Luxury', 'Casual',
+      'Technical', 'Emotional', 'Urgent', 'Trustworthy', 'Innovative'
+    ],
+    priceRange: [
+      'Budget', 'Mid-range', 'Premium', 'Luxury'
+    ],
+    brandStyle: [
+      'Modern', 'Classic', 'Minimalist', 'Bold', 'Elegant',
+      'Playful', 'Professional', 'Trendy', 'Vintage', 'Tech-forward'
+    ]
+  };
+
   // Preset prompts for Visionati analysis
-  const presetVisionatiPrompts = [
+  const presetVisionatiPrompts = mode === 'product' ? [
+    {
+      name: 'E-commerce Product Focus',
+      prompt: 'Analyze this product image and provide detailed descriptions in English focusing on e-commerce product features, benefits, and selling points suitable for online marketplace listings.'
+    },
+    {
+      name: 'Product Features & Benefits',
+      prompt: 'Describe this product focusing on its key features, benefits, target audience, and competitive advantages. Include details about materials, functionality, and value proposition.'
+    },
+    {
+      name: 'Marketing & Sales Focus',
+      prompt: 'Analyze this product from a marketing perspective, highlighting selling points, target demographics, usage scenarios, and promotional angles for e-commerce platforms.'
+    },
+    {
+      name: 'Technical Product Details',
+      prompt: 'Provide technical analysis of this product including specifications, build quality, materials, dimensions, and functional characteristics relevant for product listings.'
+    },
+    {
+      name: 'Brand & Style Analysis',
+      prompt: 'Focus on the brand positioning, design style, aesthetic appeal, and market positioning of this product for brand-conscious consumers.'
+    },
+    {
+      name: 'Customer Value Proposition',
+      prompt: 'Analyze this product from a customer value perspective, focusing on problem-solving capabilities, user benefits, and reasons to purchase.'
+    }
+  ] : [
     {
       name: 'Art-focused Analysis',
       prompt: 'Analyze this image with focus on artistic elements, composition, lighting, color palette, style, and mood. Provide detailed description suitable for AI art prompt generation.'
     },
     {
-      name: 'Photography Analysis', 
+      name: 'Photography Analysis',
       prompt: 'Describe this image from a photographer\'s perspective, including camera angle, lighting conditions, depth of field, composition techniques, and photographic style.'
     },
     {
@@ -290,25 +417,49 @@ const ImageAnalyzer = ({ apiKey }) => {
 
   const generatePrompts = async () => {
     if (!results?.description) {
-      setError('没有可用的描述来生成提示词');
+      setError(mode === 'product' ? '没有可用的描述来生成产品内容' : '没有可用的描述来生成提示词');
       return;
     }
 
-    if (!straicoService) {
-      setError('请在设置中配置您的 Straico API 密钥');
-      return;
+    if (mode === 'product') {
+      if (!productContentService) {
+        setError('请在设置中配置您的 Straico API 密钥');
+        return;
+      }
+    } else {
+      if (!straicoService) {
+        setError('请在设置中配置您的 Straico API 密钥');
+        return;
+      }
     }
 
     setIsGeneratingPrompts(true);
     setError(null);
 
     try {
-      const templateParams = {
-        ...defaultTemplateParams,
-        manualPrompt: manualPrompt
-      };
+      let prompts;
+      if (mode === 'product') {
+        // Generate product content
+        const templateParams = {
+          ...defaultTemplateParams,
+          ...productParams,
+          manualPrompt: manualPrompt
+        };
+        prompts = await productContentService.generateProductContent(
+          results.description,
+          templateParams,
+          selectedModel,
+          contentType
+        );
+      } else {
+        // Generate AI art prompts
+        const templateParams = {
+          ...defaultTemplateParams,
+          manualPrompt: manualPrompt
+        };
+        prompts = await straicoService.generatePrompts(results.description, templateParams, selectedModel);
+      }
 
-      const prompts = await straicoService.generatePrompts(results.description, templateParams);
       setGeneratedPrompts(prompts);
 
       // Update user stats
@@ -316,11 +467,13 @@ const ImageAnalyzer = ({ apiKey }) => {
         window.updateUserStats('total_prompts', prompts.length);
       }
 
-      toast.success(`生成了 ${prompts.length} 个 AI 艺术提示词！`);
+      const contentType = mode === 'product' ? '产品内容' : 'AI 艺术提示词';
+      toast.success(`生成了 ${prompts.length} 个${contentType}！`);
     } catch (err) {
-      console.error('提示词生成错误:', err);
+      console.error('内容生成错误:', err);
       setError(err.message);
-      toast.error('提示词生成失败: ' + err.message);
+      const errorType = mode === 'product' ? '产品内容' : '提示词';
+      toast.error(`${errorType}生成失败: ` + err.message);
     } finally {
       setIsGeneratingPrompts(false);
     }
@@ -558,7 +711,7 @@ const ImageAnalyzer = ({ apiKey }) => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
           <SafeIcon icon={FiImage} className="inline h-5 w-5 mr-2" />
-          高级图像和视频分析
+          {mode === 'product' ? '高级产品图像分析' : '高级图像和视频分析'}
         </h2>
 
         <div className="flex space-x-4 mb-6">
@@ -699,7 +852,10 @@ const ImageAnalyzer = ({ apiKey }) => {
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <h4 className="font-medium text-green-900 mb-2">Custom Analysis Instruction</h4>
                   <p className="text-sm text-green-700 mb-3">
-                    Define how Visionati should analyze your image to generate descriptions that match your requirements.
+                    {mode === 'product'
+                      ? 'Define how Visionati should analyze your product image to generate descriptions suitable for e-commerce.'
+                      : 'Define how Visionati should analyze your image to generate descriptions that match your requirements.'
+                    }
                   </p>
 
                   {/* Preset Prompts */}
@@ -722,7 +878,10 @@ const ImageAnalyzer = ({ apiKey }) => {
                   <textarea
                     value={visionatiPrompt}
                     onChange={(e) => setVisionatiPrompt(e.target.value)}
-                    placeholder="Enter custom analysis instructions for Visionati. For example: 'Focus on artistic composition and lighting details for AI art generation' or 'Describe this image emphasizing photographic techniques and visual aesthetics'"
+                    placeholder={mode === 'product'
+                      ? "Enter custom analysis instructions for product images. For example: 'Focus on product features and benefits for e-commerce listings' or 'Emphasize product quality and value proposition'"
+                      : "Enter custom analysis instructions for Visionati. For example: 'Focus on artistic composition and lighting details for AI art generation' or 'Describe this image emphasizing photographic techniques and visual aesthetics'"
+                    }
                     className="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
                     rows="4"
                   />
@@ -730,7 +889,10 @@ const ImageAnalyzer = ({ apiKey }) => {
                   <div className="mt-2 flex items-start space-x-2">
                     <SafeIcon icon={FiCheck} className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
                     <p className="text-xs text-green-700">
-                      This instruction will guide how Visionati analyzes your image, ensuring the generated description aligns with your specific needs for AI art prompt creation.
+                      {mode === 'product'
+                        ? 'This instruction will guide how Visionati analyzes your product image, ensuring the generated description aligns with e-commerce requirements.'
+                        : 'This instruction will guide how Visionati analyzes your image, ensuring the generated description aligns with your specific needs for AI art prompt creation.'
+                      }
                     </p>
                   </div>
 
@@ -750,10 +912,7 @@ const ImageAnalyzer = ({ apiKey }) => {
 
           {/* Analysis status indicator */}
           <div className="flex items-center space-x-2 text-sm">
-            <SafeIcon 
-              icon={visionatiPrompt.trim() ? FiCheck : FiMessageSquare} 
-              className={`h-4 w-4 ${visionatiPrompt.trim() ? 'text-green-600' : 'text-gray-400'}`} 
-            />
+            <SafeIcon icon={visionatiPrompt.trim() ? FiCheck : FiMessageSquare} className={`h-4 w-4 ${visionatiPrompt.trim() ? 'text-green-600' : 'text-gray-400'}`} />
             <span className={visionatiPrompt.trim() ? 'text-green-700' : 'text-gray-500'}>
               {visionatiPrompt.trim() ? 'Custom analysis prompt configured' : 'Using default analysis (click to customize)'}
             </span>
@@ -764,12 +923,38 @@ const ImageAnalyzer = ({ apiKey }) => {
         <div className="mt-6 flex items-center justify-between">
           <h3 className="font-medium text-gray-900">分析配置</h3>
           <div className="flex space-x-2">
+            {/* 新增：产品内容生成控制按钮 */}
+            {mode === 'product' && (
+              <>
+                <button
+                  onClick={() => setShowModelSelector(!showModelSelector)}
+                  className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  <SafeIcon icon={FiCpu} className="h-4 w-4" />
+                  <span>模型选择</span>
+                </button>
+                <button
+                  onClick={() => setShowCustomInstructions(!showCustomInstructions)}
+                  className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  <SafeIcon icon={FiMessageSquare} className="h-4 w-4" />
+                  <span>生成指令</span>
+                </button>
+                <button
+                  onClick={() => setShowProductParams(!showProductParams)}
+                  className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  <SafeIcon icon={FiShoppingBag} className="h-4 w-4" />
+                  <span>产品参数</span>
+                </button>
+              </>
+            )}
             <button
               onClick={() => setShowManualPrompt(!showManualPrompt)}
               className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors"
             >
               <SafeIcon icon={FiEdit3} className="h-4 w-4" />
-              <span>Prompt Generation</span>
+              <span>{mode === 'product' ? 'Product Content Generation' : 'Prompt Generation'}</span>
             </button>
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
@@ -781,6 +966,242 @@ const ImageAnalyzer = ({ apiKey }) => {
           </div>
         </div>
 
+        {/* 新增：Model Selection */}
+        {mode === 'product' && (
+          <AnimatePresence>
+            {showModelSelector && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mt-6 space-y-4 pt-4 border-t border-gray-200"
+              >
+                <ModelSelector
+                  apiKey={straicoKey}
+                  onModelSelect={handleModelSelect}
+                  selectedModel={selectedModel}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
+
+        {/* 新增：Custom Instructions Input */}
+        {mode === 'product' && (
+          <AnimatePresence>
+            {showCustomInstructions && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mt-6 space-y-4 pt-4 border-t border-gray-200"
+              >
+                <div className="flex items-center space-x-2 mb-3">
+                  <SafeIcon icon={FiMessageSquare} className="h-4 w-4 text-purple-600" />
+                  <h4 className="font-medium text-gray-900">自定义生成指令 (Product Content)</h4>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    生成风格和要求 (英文)
+                  </label>
+                  <textarea
+                    value={productParams.customInstructions || ''}
+                    onChange={(e) => handleProductParamChange('customInstructions', e.target.value)}
+                    placeholder="Enter specific instructions for content generation style. For example: 'Use persuasive marketing language', 'Focus on technical specifications', 'Emphasize luxury and premium quality'..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    rows="4"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    控制AI生成产品标题和描述的风格、语调和重点。
+                  </p>
+                </div>
+
+                {/* Quick style presets */}
+                <div>
+                  <h5 className="text-sm font-medium text-gray-700 mb-2">快速风格预设:</h5>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {[
+                      'Use persuasive marketing language with emotional appeal',
+                      'Focus on technical specifications and features',
+                      'Emphasize luxury and premium quality',
+                      'Write in casual, friendly tone for young audience',
+                      'Professional B2B corporate style',
+                      'Eco-friendly and sustainability focused'
+                    ].map((preset, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleProductParamChange('customInstructions', preset)}
+                        className="text-left p-2 text-xs bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors"
+                      >
+                        {preset.length > 40 ? preset.substring(0, 40) + '...' : preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Preview */}
+                {productParams.customInstructions?.trim() && (
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                    <h5 className="text-sm font-medium text-purple-900 mb-2">生成指令预览:</h5>
+                    <p className="text-sm text-purple-700 break-words">
+                      {productParams.customInstructions}
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
+
+        {/* 新增：Product Parameters Configuration */}
+        {mode === 'product' && (
+          <AnimatePresence>
+            {showProductParams && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mt-6 space-y-4 pt-4 border-t border-gray-200"
+              >
+                <div className="flex items-center space-x-2 mb-3">
+                  <SafeIcon icon={FiShoppingBag} className="h-4 w-4 text-green-600" />
+                  <h4 className="font-medium text-gray-900">产品内容生成参数</h4>
+                </div>
+
+                {/* Content Type Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    生成内容类型
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => setContentType('title')}
+                      className={`p-3 rounded-lg border text-center transition-colors ${
+                        contentType === 'title'
+                          ? 'border-green-500 bg-green-50 text-green-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <SafeIcon icon={FiTag} className="h-4 w-4 mx-auto mb-1" />
+                      <span className="text-sm font-medium">仅标题</span>
+                    </button>
+                    <button
+                      onClick={() => setContentType('description')}
+                      className={`p-3 rounded-lg border text-center transition-colors ${
+                        contentType === 'description'
+                          ? 'border-green-500 bg-green-50 text-green-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <SafeIcon icon={FiEdit3} className="h-4 w-4 mx-auto mb-1" />
+                      <span className="text-sm font-medium">仅描述</span>
+                    </button>
+                    <button
+                      onClick={() => setContentType('both')}
+                      className={`p-3 rounded-lg border text-center transition-colors ${
+                        contentType === 'both'
+                          ? 'border-green-500 bg-green-50 text-green-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <SafeIcon icon={FiShoppingBag} className="h-4 w-4 mx-auto mb-1" />
+                      <span className="text-sm font-medium">标题+描述</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Basic Parameters */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      产品类别
+                    </label>
+                    <select
+                      value={productParams.category}
+                      onChange={(e) => handleProductParamChange('category', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      {paramOptions.category.map(option => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      目标受众
+                    </label>
+                    <select
+                      value={productParams.targetAudience}
+                      onChange={(e) => handleProductParamChange('targetAudience', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      {paramOptions.targetAudience.map(option => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      销售平台
+                    </label>
+                    <select
+                      value={productParams.platform}
+                      onChange={(e) => handleProductParamChange('platform', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      {paramOptions.platform.map(option => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      语调风格
+                    </label>
+                    <select
+                      value={productParams.tone}
+                      onChange={(e) => handleProductParamChange('tone', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      {paramOptions.tone.map(option => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Additional Product Info */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      关键特性描述 (英文)
+                    </label>
+                    <textarea
+                      value={productParams.keyFeatures || ''}
+                      onChange={(e) => handleProductParamChange('keyFeatures', e.target.value)}
+                      placeholder="Enter product key features, selling points, advantages in English..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                      rows="3"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
+
         {/* Manual Prompt Configuration */}
         {showManualPrompt && (
           <motion.div
@@ -791,29 +1212,39 @@ const ImageAnalyzer = ({ apiKey }) => {
           >
             <div className="flex items-center space-x-2 mb-3">
               <SafeIcon icon={FiEdit3} className="h-4 w-4 text-blue-600" />
-              <h4 className="font-medium text-gray-900">Prompt Generation Instructions</h4>
+              <h4 className="font-medium text-gray-900">
+                {mode === 'product' ? 'Product Content Generation Instructions' : 'Prompt Generation Instructions'}
+              </h4>
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Instructions for Final Prompt Generation
+                {mode === 'product' ? 'Custom Instructions for Product Content Generation' : 'Custom Instructions for Final Prompt Generation'}
               </label>
               <textarea
                 value={manualPrompt}
                 onChange={(e) => setManualPrompt(e.target.value)}
-                placeholder="Enter specific instructions for final AI art prompt generation. For example: 'Focus on lighting and composition', 'Emphasize realistic textures', 'Create cinematic atmosphere'..."
+                placeholder={mode === 'product'
+                  ? "Enter specific instructions for product content generation. For example: 'Emphasize premium quality', 'Target young consumers', 'Highlight eco-friendly features'..."
+                  : "Enter specific instructions for final AI art prompt generation. For example: 'Focus on lighting and composition', 'Emphasize realistic textures', 'Create cinematic atmosphere'..."
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 rows="4"
               />
               <p className="text-xs text-gray-500 mt-1">
-                This will guide the final AI art prompt generation step (different from image analysis above).
+                {mode === 'product'
+                  ? 'This will guide the final product content generation step (different from image analysis above).'
+                  : 'This will guide the final AI art prompt generation step (different from image analysis above).'
+                }
               </p>
             </div>
 
             {/* Manual prompt preview */}
             {manualPrompt?.trim() && (
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <h5 className="text-sm font-medium text-blue-900 mb-2">Final Prompt Instructions:</h5>
+                <h5 className="text-sm font-medium text-blue-900 mb-2">
+                  {mode === 'product' ? 'Product Content Instructions:' : 'Final Prompt Instructions:'}
+                </h5>
                 <p className="text-sm text-blue-700 break-words">
                   {manualPrompt}
                 </p>
@@ -1007,7 +1438,7 @@ const ImageAnalyzer = ({ apiKey }) => {
           ) : (
             <>
               <SafeIcon icon={FiEye} className="inline h-4 w-4 mr-2" />
-              分析内容
+              {mode === 'product' ? '分析产品图像' : '分析内容'}
               {visionatiPrompt.trim() && <span className="ml-1 text-green-200">(自定义分析)</span>}
             </>
           )}
@@ -1039,13 +1470,15 @@ const ImageAnalyzer = ({ apiKey }) => {
         </div>
       )}
 
-      {/* Prompt Generator */}
+      {/* Content Generator */}
       {showPromptGenerator && results?.description && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
-              <SafeIcon icon={FiZap} className="h-5 w-5 text-purple-600" />
-              <h3 className="text-lg font-semibold text-gray-900">AI Prompt Generator</h3>
+              <SafeIcon icon={mode === 'product' ? FiShoppingBag : FiZap} className={`h-5 w-5 ${mode === 'product' ? 'text-green-600' : 'text-purple-600'}`} />
+              <h3 className="text-lg font-semibold text-gray-900">
+                {mode === 'product' ? 'Product Content Generator' : 'AI Prompt Generator'}
+              </h3>
             </div>
             {!straicoKey && (
               <div className="text-sm text-red-600">
@@ -1062,41 +1495,75 @@ const ImageAnalyzer = ({ apiKey }) => {
           {/* Manual prompt display for advanced mode */}
           {manualPrompt?.trim() && (
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-              <h5 className="text-sm font-medium text-blue-900 mb-2">Final Prompt Instructions:</h5>
+              <h5 className="text-sm font-medium text-blue-900 mb-2">
+                {mode === 'product' ? 'Product Content Instructions:' : 'Final Prompt Instructions:'}
+              </h5>
               <p className="text-sm text-blue-700 break-words">
                 {manualPrompt}
               </p>
             </div>
           )}
 
+          {/* 新增：显示产品内容生成配置 */}
+          {mode === 'product' && (
+            <div className="space-y-3 mb-4">
+              {selectedModel && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <h5 className="text-sm font-medium text-green-900 mb-1">Selected AI Model:</h5>
+                  <p className="text-sm text-green-700">{selectedModel}</p>
+                </div>
+              )}
+              
+              {productParams.customInstructions?.trim() && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                  <h5 className="text-sm font-medium text-purple-900 mb-1">Generation Style:</h5>
+                  <p className="text-sm text-purple-700">{productParams.customInstructions}</p>
+                </div>
+              )}
+              
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <h5 className="text-sm font-medium text-blue-900 mb-1">Content Settings:</h5>
+                <div className="text-sm text-blue-700 grid grid-cols-2 gap-2">
+                  <p>Type: {contentType === 'title' ? 'Titles Only' : contentType === 'description' ? 'Descriptions Only' : 'Titles & Descriptions'}</p>
+                  <p>Category: {productParams.category}</p>
+                  <p>Platform: {productParams.platform}</p>
+                  <p>Audience: {productParams.targetAudience}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={generatePrompts}
             disabled={isGeneratingPrompts || !straicoKey}
-            className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            className={`w-full ${mode === 'product' ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'} text-white py-3 px-6 rounded-lg font-medium disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors`}
           >
             {isGeneratingPrompts ? (
               <>
                 <SafeIcon icon={FiLoader} className="inline h-4 w-4 mr-2 animate-spin" />
-                Generating AI Art Prompts...
+                {mode === 'product' ? 'Generating Product Content...' : 'Generating AI Art Prompts...'}
               </>
             ) : (
               <>
-                <SafeIcon icon={FiZap} className="inline h-4 w-4 mr-2" />
-                Generate AI Art Prompts
+                <SafeIcon icon={mode === 'product' ? FiShoppingBag : FiZap} className="inline h-4 w-4 mr-2" />
+                {mode === 'product' ? 'Generate Product Content' : 'Generate AI Art Prompts'}
+                {selectedModel && <span className="ml-2 text-green-200">({selectedModel.split('/')[1] || selectedModel})</span>}
               </>
             )}
           </button>
         </div>
       )}
 
-      {/* Generated Prompts */}
+      {/* Generated Content */}
       {generatedPrompts.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
-              <SafeIcon icon={FiZap} className="h-5 w-5 text-purple-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Generated AI Art Prompts</h3>
-              <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
+              <SafeIcon icon={mode === 'product' ? FiShoppingBag : FiZap} className={`h-5 w-5 ${mode === 'product' ? 'text-green-600' : 'text-purple-600'}`} />
+              <h3 className="text-lg font-semibold text-gray-900">
+                {mode === 'product' ? 'Generated Product Content' : 'Generated AI Art Prompts'}
+              </h3>
+              <span className={`px-2 py-1 ${mode === 'product' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'} text-xs rounded-full`}>
                 {generatedPrompts.length}
               </span>
             </div>
@@ -1121,18 +1588,41 @@ const ImageAnalyzer = ({ apiKey }) => {
               >
                 <div className="flex items-start justify-between mb-2">
                   <span className="text-sm font-medium text-gray-700">
-                    {prompt.variation || `Prompt ${index + 1}`}
+                    {prompt.variation || `${mode === 'product' ? 'Product Content' : 'Prompt'} ${index + 1}`}
                   </span>
                   <button
                     onClick={() => copyPrompt(prompt)}
-                    className="text-purple-600 hover:text-purple-700 p-1"
+                    className={`${mode === 'product' ? 'text-green-600 hover:text-green-700' : 'text-purple-600 hover:text-purple-700'} p-1`}
                   >
                     <SafeIcon icon={FiCopy} className="h-4 w-4" />
                   </button>
                 </div>
-                <p className="text-gray-700 text-sm leading-relaxed">
-                  {prompt.text}
-                </p>
+
+                {mode === 'product' ? (
+                  <div className="space-y-3">
+                    {prompt.title && (
+                      <div>
+                        <h4 className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Product Title</h4>
+                        <p className="text-gray-900 font-medium leading-relaxed">
+                          {prompt.title}
+                        </p>
+                      </div>
+                    )}
+                    {prompt.description && (
+                      <div>
+                        <h4 className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Product Description</h4>
+                        <p className="text-gray-700 leading-relaxed text-sm">
+                          {prompt.description}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-gray-700 text-sm leading-relaxed">
+                    {prompt.text}
+                  </p>
+                )}
+
                 <div className="flex items-center justify-between text-xs text-gray-500 mt-2">
                   <span>Style: {prompt.style}</span>
                   <span>{new Date(prompt.timestamp).toLocaleTimeString()}</span>
