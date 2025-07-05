@@ -1,152 +1,178 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import * as FiIcons from 'react-icons/fi';
-import SafeIcon from '../common/SafeIcon';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import * as FiIcons from 'react-icons/fi'
+import SafeIcon from '../common/SafeIcon'
+import toast from 'react-hot-toast'
 
-const { FiLock, FiEye, FiEyeOff, FiShield, FiZap, FiKey } = FiIcons;
+const { FiLock, FiEye, FiEyeOff, FiShield, FiZap, FiKey } = FiIcons
 
 const AuthGuard = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [attempts, setAttempts] = useState(0);
-  const [isBlocked, setIsBlocked] = useState(false);
-  const [blockTimeLeft, setBlockTimeLeft] = useState(0);
+  console.log('AuthGuard: Component rendering...')
+  
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [attempts, setAttempts] = useState(0)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [blockTimeLeft, setBlockTimeLeft] = useState(0)
+  const [isInitializing, setIsInitializing] = useState(true)
 
-  const CORRECT_PASSWORD = 'Hello@123456';
-  const MAX_ATTEMPTS = 5;
-  const BLOCK_DURATION = 5 * 60 * 1000; // 5分钟
+  const CORRECT_PASSWORD = 'Hello@123456'
+  const MAX_ATTEMPTS = 5
+  const BLOCK_DURATION = 5 * 60 * 1000 // 5分钟
 
   useEffect(() => {
-    // 检查用户是否已认证
-    const authStatus = localStorage.getItem('repromp_auth');
-    const authTime = localStorage.getItem('repromp_auth_time');
+    console.log('AuthGuard: Initializing...')
+    
+    // Check if user is already authenticated
+    const authStatus = localStorage.getItem('repromp_auth')
+    const authTime = localStorage.getItem('repromp_auth_time')
     
     if (authStatus === 'true' && authTime) {
-      const timeDiff = Date.now() - parseInt(authTime);
-      // 保持认证状态24小时
+      const timeDiff = Date.now() - parseInt(authTime)
+      // Keep authentication for 24 hours
       if (timeDiff < 24 * 60 * 60 * 1000) {
-        setIsAuthenticated(true);
-        return;
+        console.log('AuthGuard: Found valid authentication')
+        setIsAuthenticated(true)
+        setIsInitializing(false)
+        return
       } else {
-        // 清除过期认证
-        localStorage.removeItem('repromp_auth');
-        localStorage.removeItem('repromp_auth_time');
+        // Clear expired authentication
+        localStorage.removeItem('repromp_auth')
+        localStorage.removeItem('repromp_auth_time')
       }
     }
 
-    // 检查用户是否被封锁
-    const blockStatus = localStorage.getItem('repromp_blocked');
-    const blockTime = localStorage.getItem('repromp_block_time');
+    // Check if user is blocked
+    const blockStatus = localStorage.getItem('repromp_blocked')
+    const blockTime = localStorage.getItem('repromp_block_time')
     
     if (blockStatus === 'true' && blockTime) {
-      const timeLeft = BLOCK_DURATION - (Date.now() - parseInt(blockTime));
+      const timeLeft = BLOCK_DURATION - (Date.now() - parseInt(blockTime))
       if (timeLeft > 0) {
-        setIsBlocked(true);
-        setBlockTimeLeft(Math.ceil(timeLeft / 1000));
-        startBlockTimer(timeLeft);
+        setIsBlocked(true)
+        setBlockTimeLeft(Math.ceil(timeLeft / 1000))
+        startBlockTimer(timeLeft)
       } else {
-        // 清除过期封锁
-        localStorage.removeItem('repromp_blocked');
-        localStorage.removeItem('repromp_block_time');
-        localStorage.removeItem('repromp_attempts');
+        // Clear expired block
+        localStorage.removeItem('repromp_blocked')
+        localStorage.removeItem('repromp_block_time')
+        localStorage.removeItem('repromp_attempts')
       }
     }
 
-    // 获取当前尝试次数
-    const storedAttempts = localStorage.getItem('repromp_attempts');
+    // Get current attempts
+    const storedAttempts = localStorage.getItem('repromp_attempts')
     if (storedAttempts) {
-      setAttempts(parseInt(storedAttempts));
+      setAttempts(parseInt(storedAttempts))
     }
-  }, []);
+
+    setIsInitializing(false)
+    console.log('AuthGuard: Initialization complete')
+  }, [])
 
   const startBlockTimer = (duration) => {
     const interval = setInterval(() => {
       setBlockTimeLeft(prev => {
         if (prev <= 1) {
-          clearInterval(interval);
-          setIsBlocked(false);
-          setAttempts(0);
-          localStorage.removeItem('repromp_blocked');
-          localStorage.removeItem('repromp_block_time');
-          localStorage.removeItem('repromp_attempts');
-          toast.success('现在可以重新尝试了！');
-          return 0;
+          clearInterval(interval)
+          setIsBlocked(false)
+          setAttempts(0)
+          localStorage.removeItem('repromp_blocked')
+          localStorage.removeItem('repromp_block_time')
+          localStorage.removeItem('repromp_attempts')
+          toast.success('现在可以重新尝试了！')
+          return 0
         }
-        return prev - 1;
-      });
-    }, 1000);
-  };
+        return prev - 1
+      })
+    }, 1000)
+  }
 
   const handleSubmit = (e) => {
-    e.preventDefault();
-    
+    e.preventDefault()
+    console.log('AuthGuard: Handling password submission...')
+
     if (isBlocked) {
-      toast.error(`请等待 ${Math.ceil(blockTimeLeft / 60)} 分钟后再试`);
-      return;
+      toast.error(`请等待 ${Math.ceil(blockTimeLeft / 60)} 分钟后再试`)
+      return
     }
 
     if (!password.trim()) {
-      toast.error('请输入密码');
-      return;
+      toast.error('请输入密码')
+      return
     }
 
-    setIsLoading(true);
+    setIsLoading(true)
 
-    // 模拟网络延迟以增加安全性
+    // Simulate network delay for security
     setTimeout(() => {
       if (password === CORRECT_PASSWORD) {
-        // 认证成功
-        setIsAuthenticated(true);
-        localStorage.setItem('repromp_auth', 'true');
-        localStorage.setItem('repromp_auth_time', Date.now().toString());
-        localStorage.removeItem('repromp_attempts');
-        localStorage.removeItem('repromp_blocked');
-        localStorage.removeItem('repromp_block_time');
-        toast.success('欢迎使用智能提示词生成器！🎉');
+        // Authentication success
+        console.log('AuthGuard: Authentication successful')
+        setIsAuthenticated(true)
+        localStorage.setItem('repromp_auth', 'true')
+        localStorage.setItem('repromp_auth_time', Date.now().toString())
+        localStorage.removeItem('repromp_attempts')
+        localStorage.removeItem('repromp_blocked')
+        localStorage.removeItem('repromp_block_time')
+        toast.success('欢迎使用智能提示词生成器！🎉')
       } else {
-        // 认证失败
-        const newAttempts = attempts + 1;
-        setAttempts(newAttempts);
-        localStorage.setItem('repromp_attempts', newAttempts.toString());
+        // Authentication failed
+        const newAttempts = attempts + 1
+        setAttempts(newAttempts)
+        localStorage.setItem('repromp_attempts', newAttempts.toString())
 
         if (newAttempts >= MAX_ATTEMPTS) {
-          // 封锁用户
-          setIsBlocked(true);
-          setBlockTimeLeft(BLOCK_DURATION / 1000);
-          localStorage.setItem('repromp_blocked', 'true');
-          localStorage.setItem('repromp_block_time', Date.now().toString());
-          startBlockTimer(BLOCK_DURATION);
-          toast.error(`尝试次数过多！已封锁 5 分钟。`);
+          // Block user
+          setIsBlocked(true)
+          setBlockTimeLeft(BLOCK_DURATION / 1000)
+          localStorage.setItem('repromp_blocked', 'true')
+          localStorage.setItem('repromp_block_time', Date.now().toString())
+          startBlockTimer(BLOCK_DURATION)
+          toast.error(`尝试次数过多！已封锁 5 分钟。`)
         } else {
-          toast.error(`密码错误。还剩 ${MAX_ATTEMPTS - newAttempts} 次尝试机会。`);
+          toast.error(`密码错误。还剩 ${MAX_ATTEMPTS - newAttempts} 次尝试机会。`)
         }
       }
-      
-      setPassword('');
-      setIsLoading(false);
-    }, 1000);
-  };
+
+      setPassword('')
+      setIsLoading(false)
+    }, 1000)
+  }
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('repromp_auth');
-    localStorage.removeItem('repromp_auth_time');
-    toast.success('已成功退出登录');
-  };
+    console.log('AuthGuard: Logging out...')
+    setIsAuthenticated(false)
+    localStorage.removeItem('repromp_auth')
+    localStorage.removeItem('repromp_auth_time')
+    toast.success('已成功退出登录')
+  }
 
   const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
+  }
+
+  // Show loading while initializing
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <SafeIcon icon={FiIcons.FiLoader} className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">初始化中...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (isAuthenticated) {
+    console.log('AuthGuard: User authenticated, rendering children')
     return (
       <div className="min-h-screen bg-gray-50">
-        {/* 退出登录按钮 */}
+        {/* Logout button */}
         <div className="absolute top-4 right-4 z-50">
           <button
             onClick={handleLogout}
@@ -158,14 +184,16 @@ const AuthGuard = ({ children }) => {
         </div>
         {children}
       </div>
-    );
+    )
   }
+
+  console.log('AuthGuard: Rendering authentication form')
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black opacity-50"></div>
       
-      {/* 动画背景元素 */}
+      {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <motion.div
           animate={{
@@ -200,7 +228,7 @@ const AuthGuard = ({ children }) => {
         className="relative z-10 w-full max-w-md"
       >
         <div className="bg-white rounded-2xl shadow-2xl p-8 backdrop-blur-sm bg-opacity-95">
-          {/* 头部 */}
+          {/* Header */}
           <div className="text-center mb-8">
             <motion.div
               initial={{ scale: 0 }}
@@ -214,7 +242,7 @@ const AuthGuard = ({ children }) => {
             <p className="text-gray-600">AI 艺术提示词生成工具</p>
           </div>
 
-          {/* 封锁状态 */}
+          {/* Block status */}
           <AnimatePresence>
             {isBlocked && (
               <motion.div
@@ -239,7 +267,7 @@ const AuthGuard = ({ children }) => {
             )}
           </AnimatePresence>
 
-          {/* 登录表单 */}
+          {/* Login form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -263,22 +291,22 @@ const AuthGuard = ({ children }) => {
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   disabled={isBlocked}
                 >
-                  <SafeIcon
-                    icon={showPassword ? FiEyeOff : FiEye}
-                    className="h-5 w-5 text-gray-400 hover:text-gray-600"
+                  <SafeIcon 
+                    icon={showPassword ? FiEyeOff : FiEye} 
+                    className="h-5 w-5 text-gray-400 hover:text-gray-600" 
                   />
                 </button>
               </div>
             </div>
 
-            {/* 尝试次数计数器 */}
+            {/* Attempts counter */}
             {attempts > 0 && !isBlocked && (
               <div className="text-center">
                 <p className="text-sm text-orange-600">
                   已使用 {attempts}/{MAX_ATTEMPTS} 次尝试机会
                 </p>
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                  <div
+                  <div 
                     className="bg-orange-500 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${(attempts / MAX_ATTEMPTS) * 100}%` }}
                   />
@@ -305,7 +333,7 @@ const AuthGuard = ({ children }) => {
             </button>
           </form>
 
-          {/* 安全信息 */}
+          {/* Security info */}
           <div className="mt-8 p-4 bg-gray-50 rounded-lg">
             <h3 className="font-medium text-gray-900 mb-2 flex items-center">
               <SafeIcon icon={FiShield} className="h-4 w-4 mr-2" />
@@ -319,14 +347,14 @@ const AuthGuard = ({ children }) => {
             </ul>
           </div>
 
-          {/* 页脚 */}
+          {/* Footer */}
           <div className="mt-6 text-center text-sm text-gray-500">
             <p>由智能提示词生成器安全系统保护</p>
           </div>
         </div>
       </motion.div>
     </div>
-  );
-};
+  )
+}
 
-export default AuthGuard;
+export default AuthGuard

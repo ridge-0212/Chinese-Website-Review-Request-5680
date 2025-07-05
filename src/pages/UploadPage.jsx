@@ -16,34 +16,34 @@ import toast from 'react-hot-toast'
 const UploadPage = () => {
   const { user } = useAuth()
   const { logApiUsage } = useDatabase()
-  
+
   // State management
-  const {
-    isAnalyzing,
-    isGenerating,
-    currentImage,
-    currentDescription,
-    currentPrompts,
-    error,
-    setAnalyzing,
-    setGenerating,
-    setCurrentImage,
-    setCurrentDescription,
-    setCurrentPrompts,
-    setError,
-    reset
+  const { 
+    isAnalyzing, 
+    isGenerating, 
+    currentImage, 
+    currentDescription, 
+    currentPrompts, 
+    error, 
+    setAnalyzing, 
+    setGenerating, 
+    setCurrentImage, 
+    setCurrentDescription, 
+    setCurrentPrompts, 
+    setError, 
+    reset 
   } = useUIStore()
-  
+
   // Always call all hooks - determine which to use after
   const supabaseHistoryStore = useSupabaseHistoryStore()
   const localHistoryStore = useSettingsStore()
   const supabaseSettingsStore = useSupabaseSettingsStore()
   const localSettingsStore = useSettingsStore()
-  
+
   // Select the appropriate store based on user authentication
   const historyStore = user ? supabaseHistoryStore : localHistoryStore
   const settingsStore = user ? supabaseSettingsStore : localSettingsStore
-  
+
   const { addEntry } = historyStore
   const { visionatiKey, straicoKey } = settingsStore
 
@@ -73,10 +73,10 @@ const UploadPage = () => {
 
     try {
       const visionatiService = new VisionatiService(visionatiKey)
-      
+
       // Log API usage start
       const apiStartTime = Date.now()
-      
+
       const result = await visionatiService.analyzeImage({
         file: file,
         features: ['tags', 'descriptions', 'colors', 'nsfw'],
@@ -111,6 +111,11 @@ const UploadPage = () => {
 
       if (result.description) {
         toast.success('图像分析成功！现在可以生成提示词了。')
+        
+        // Update user stats
+        if (window.updateUserStats) {
+          window.updateUserStats('total_analyses', 1)
+        }
       } else {
         toast.error('图像分析完成但未生成描述。')
       }
@@ -118,7 +123,7 @@ const UploadPage = () => {
       console.error('分析错误:', err)
       setError(err.message)
       toast.error('图像分析失败: ' + err.message)
-      
+
       // Log API usage failure
       if (user) {
         await logApiUsage({
@@ -159,11 +164,10 @@ const UploadPage = () => {
     try {
       const straicoService = new StraicoService(straicoKey)
       const apiStartTime = Date.now()
-      
+
       console.log('调用 generatePrompts，参数:', { description: currentDescription, templateParams })
-      
       const prompts = await straicoService.generatePrompts(currentDescription, templateParams)
-      
+
       // Log API usage
       if (user) {
         await logApiUsage({
@@ -206,6 +210,13 @@ const UploadPage = () => {
         }
 
         await addEntry(historyEntry)
+
+        // Update user stats
+        if (window.updateUserStats) {
+          window.updateUserStats('total_prompts', prompts.length)
+          window.updateUserStats('history_count', 1)
+        }
+
         toast.success(`成功生成 ${prompts.length} 个 AI 艺术提示词！`)
       } else {
         throw new Error('未生成任何提示词')
@@ -214,7 +225,7 @@ const UploadPage = () => {
       console.error('提示词生成错误:', err)
       setError(err.message)
       toast.error('提示词生成失败: ' + err.message)
-      
+
       // Log API usage failure
       if (user) {
         await logApiUsage({
@@ -266,7 +277,11 @@ const UploadPage = () => {
         >
           <div className="flex items-center">
             <svg className="h-5 w-5 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                clipRule="evenodd"
+              />
             </svg>
             <p className="text-red-700">{error}</p>
           </div>

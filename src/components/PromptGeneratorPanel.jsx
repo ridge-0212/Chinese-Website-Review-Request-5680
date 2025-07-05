@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../common/SafeIcon';
@@ -14,6 +14,33 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
     ...defaultTemplateParams,
     manualPrompt: defaultTemplateParams.manualPrompt || ''
   });
+
+  // Load saved settings on component mount
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('simple_prompt_settings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setTemplateParams(prev => ({ ...prev, ...settings }));
+        setShowAdvanced(settings.showAdvanced || false);
+        setShowManualPrompt(settings.showManualPrompt || false);
+        console.log('Loaded saved simple prompt settings:', settings);
+      } catch (error) {
+        console.error('Error loading saved settings:', error);
+      }
+    }
+  }, []);
+
+  // Save settings whenever they change
+  useEffect(() => {
+    const settings = {
+      ...templateParams,
+      showAdvanced,
+      showManualPrompt
+    };
+    localStorage.setItem('simple_prompt_settings', JSON.stringify(settings));
+    console.log('Saved simple prompt settings:', settings);
+  }, [templateParams, showAdvanced, showManualPrompt]);
 
   const handleParamChange = (key, value) => {
     const newParams = { ...templateParams, [key]: value };
@@ -72,10 +99,7 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
       {/* Status Display */}
       <div className="mb-4 p-3 rounded-lg bg-gray-50">
         <div className="flex items-center space-x-2">
-          <SafeIcon
-            icon={hasDescription ? FiCheck : FiX}
-            className={`h-4 w-4 ${hasDescription ? 'text-green-600' : 'text-red-600'}`}
-          />
+          <SafeIcon icon={hasDescription ? FiCheck : FiX} className={`h-4 w-4 ${hasDescription ? 'text-green-600' : 'text-red-600'}`} />
           <span className={`text-sm font-medium ${hasDescription ? 'text-green-700' : 'text-red-700'}`}>
             {hasDescription ? 'Image Analyzed - Ready to Generate' : 'Please Analyze Image First'}
           </span>
@@ -95,7 +119,6 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
               <SafeIcon icon={FiEdit3} className="h-4 w-4 text-blue-600" />
               <h4 className="font-medium text-gray-900">Manual Prompt Input</h4>
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Custom Prompt Instructions
@@ -142,7 +165,6 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
               ))}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Length
@@ -186,7 +208,6 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Artistic Style
@@ -203,7 +224,6 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Mood
@@ -220,7 +240,6 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Lighting
@@ -237,7 +256,6 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
                   ))}
                 </select>
               </div>
-
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Composition

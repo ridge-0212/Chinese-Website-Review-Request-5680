@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../common/SafeIcon';
@@ -8,10 +8,7 @@ import { useSettingsStore } from '../store/useStore';
 import { copyPrompt } from '../utils/clipboard';
 import toast from 'react-hot-toast';
 
-const {
-  FiUpload, FiImage, FiVideo, FiLink, FiLoader, FiCheck, FiX, FiEye, FiTag, FiPalette,
-  FiSettings, FiCpu, FiZap, FiCopy, FiRefreshCw, FiEdit3, FiMessageSquare
-} = FiIcons;
+const { FiUpload, FiImage, FiVideo, FiLink, FiLoader, FiCheck, FiX, FiEye, FiTag, FiPalette, FiSettings, FiCpu, FiZap, FiCopy, FiRefreshCw, FiEdit3, FiMessageSquare } = FiIcons;
 
 const ImageAnalyzer = ({ apiKey }) => {
   const [analysisMode, setAnalysisMode] = useState('upload');
@@ -28,7 +25,7 @@ const ImageAnalyzer = ({ apiKey }) => {
   const [showManualPrompt, setShowManualPrompt] = useState(false);
   const [showVisionatiPrompt, setShowVisionatiPrompt] = useState(false);
 
-  // Analysis configuration
+  // Analysis configuration with localStorage persistence
   const [selectedFeatures, setSelectedFeatures] = useState(['tags', 'descriptions', 'colors', 'nsfw']);
   const [selectedBackends, setSelectedBackends] = useState(['openai', 'googlevision', 'clarifai']);
   const [selectedRole, setSelectedRole] = useState('general');
@@ -46,6 +43,56 @@ const ImageAnalyzer = ({ apiKey }) => {
 
   const visionatiService = apiKey ? new VisionatiService(apiKey) : null;
   const straicoService = straicoKey ? new StraicoService(straicoKey) : null;
+
+  // Load saved settings on component mount
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('advanced_analysis_settings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setSelectedFeatures(settings.selectedFeatures || ['tags', 'descriptions', 'colors', 'nsfw']);
+        setSelectedBackends(settings.selectedBackends || ['openai', 'googlevision', 'clarifai']);
+        setSelectedRole(settings.selectedRole || 'general');
+        setLanguage(settings.language || 'English');
+        setTagScore(settings.tagScore || 0.85);
+        setCustomPrompt(settings.customPrompt || '');
+        setVisionatiPrompt(settings.visionatiPrompt || '');
+        setManualPrompt(settings.manualPrompt || '');
+        setShowAdvanced(settings.showAdvanced || false);
+        setShowManualPrompt(settings.showManualPrompt || false);
+        setShowVisionatiPrompt(settings.showVisionatiPrompt || false);
+        
+        console.log('Loaded saved advanced analysis settings:', settings);
+      } catch (error) {
+        console.error('Error loading saved settings:', error);
+      }
+    }
+  }, []);
+
+  // Save settings whenever they change
+  const saveSettings = useCallback(() => {
+    const settings = {
+      selectedFeatures,
+      selectedBackends,
+      selectedRole,
+      language,
+      tagScore,
+      customPrompt,
+      visionatiPrompt,
+      manualPrompt,
+      showAdvanced,
+      showManualPrompt,
+      showVisionatiPrompt
+    };
+    
+    localStorage.setItem('advanced_analysis_settings', JSON.stringify(settings));
+    console.log('Saved advanced analysis settings:', settings);
+  }, [selectedFeatures, selectedBackends, selectedRole, language, tagScore, customPrompt, visionatiPrompt, manualPrompt, showAdvanced, showManualPrompt, showVisionatiPrompt]);
+
+  // Save settings whenever any setting changes
+  useEffect(() => {
+    saveSettings();
+  }, [saveSettings]);
 
   // Available features
   const features = [
@@ -90,8 +137,7 @@ const ImageAnalyzer = ({ apiKey }) => {
 
   // Popular languages
   const languages = [
-    'English', 'Chinese', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Russian', 
-    'Japanese', 'Korean', 'Arabic', 'Hindi', 'Dutch', 'Swedish', 'Norwegian', 'Danish', 'Finnish'
+    'English', 'Chinese', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Russian', 'Japanese', 'Korean', 'Arabic', 'Hindi', 'Dutch', 'Swedish', 'Norwegian', 'Danish', 'Finnish'
   ];
 
   // Preset prompts for Visionati analysis
@@ -101,7 +147,7 @@ const ImageAnalyzer = ({ apiKey }) => {
       prompt: 'Analyze this image with focus on artistic elements, composition, lighting, color palette, style, and mood. Provide detailed description suitable for AI art prompt generation.'
     },
     {
-      name: 'Photography Analysis',
+      name: 'Photography Analysis', 
       prompt: 'Describe this image from a photographer\'s perspective, including camera angle, lighting conditions, depth of field, composition techniques, and photographic style.'
     },
     {
@@ -227,6 +273,11 @@ const ImageAnalyzer = ({ apiKey }) => {
         setShowPromptGenerator(true);
       }
 
+      // Update user stats
+      if (window.updateUserStats) {
+        window.updateUserStats('total_analyses', 1);
+      }
+
       toast.success('分析完成成功！');
     } catch (err) {
       console.error('分析错误:', err);
@@ -259,6 +310,12 @@ const ImageAnalyzer = ({ apiKey }) => {
 
       const prompts = await straicoService.generatePrompts(results.description, templateParams);
       setGeneratedPrompts(prompts);
+
+      // Update user stats
+      if (window.updateUserStats) {
+        window.updateUserStats('total_prompts', prompts.length);
+      }
+
       toast.success(`生成了 ${prompts.length} 个 AI 艺术提示词！`);
     } catch (err) {
       console.error('提示词生成错误:', err);
@@ -307,6 +364,7 @@ const ImageAnalyzer = ({ apiKey }) => {
     toast.success('预设提示词已应用！');
   };
 
+  // Rest of the component remains the same...
   const renderResults = () => {
     if (!results || !results.all || !results.all.assets) return null;
 
@@ -410,9 +468,7 @@ const ImageAnalyzer = ({ apiKey }) => {
               {asset.nsfw.map((item, index) => (
                 <div key={index} className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">{item.label}</span>
-                  <span className={`text-sm font-medium ${
-                    item.label === 'sfw' || item.label === 'safe' ? 'text-green-600' : 'text-red-600'
-                  }`}>
+                  <span className={`text-sm font-medium ${item.label === 'sfw' || item.label === 'safe' ? 'text-green-600' : 'text-red-600'}`}>
                     {item.score ? `${(item.score * 100).toFixed(1)}%` : item.likelihood}
                   </span>
                 </div>
@@ -593,6 +649,7 @@ const ImageAnalyzer = ({ apiKey }) => {
               placeholder="输入图像或视频 URL"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+
             {/* URL Preview */}
             {url && (
               <div className="p-4 bg-gray-50 rounded-lg">
@@ -644,7 +701,7 @@ const ImageAnalyzer = ({ apiKey }) => {
                   <p className="text-sm text-green-700 mb-3">
                     Define how Visionati should analyze your image to generate descriptions that match your requirements.
                   </p>
-                  
+
                   {/* Preset Prompts */}
                   <div className="mb-4">
                     <h5 className="text-sm font-medium text-green-900 mb-2">Quick Presets:</h5>
@@ -669,7 +726,7 @@ const ImageAnalyzer = ({ apiKey }) => {
                     className="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
                     rows="4"
                   />
-                  
+
                   <div className="mt-2 flex items-start space-x-2">
                     <SafeIcon icon={FiCheck} className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
                     <p className="text-xs text-green-700">
@@ -698,10 +755,7 @@ const ImageAnalyzer = ({ apiKey }) => {
               className={`h-4 w-4 ${visionatiPrompt.trim() ? 'text-green-600' : 'text-gray-400'}`} 
             />
             <span className={visionatiPrompt.trim() ? 'text-green-700' : 'text-gray-500'}>
-              {visionatiPrompt.trim() 
-                ? 'Custom analysis prompt configured' 
-                : 'Using default analysis (click to customize)'
-              }
+              {visionatiPrompt.trim() ? 'Custom analysis prompt configured' : 'Using default analysis (click to customize)'}
             </span>
           </div>
         </div>
@@ -1055,6 +1109,7 @@ const ImageAnalyzer = ({ apiKey }) => {
               <span>Regenerate</span>
             </button>
           </div>
+
           <div className="space-y-4">
             {generatedPrompts.map((prompt, index) => (
               <motion.div

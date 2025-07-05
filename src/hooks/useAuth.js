@@ -10,15 +10,32 @@ export const useAuth = () => {
   const navigate = useNavigate()
 
   useEffect(() => {
+    console.log('useAuth: Initializing...')
+    
     // Get initial session
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setUser(session?.user || null)
-      
-      if (session?.user) {
-        await fetchProfile(session.user.id)
+      try {
+        console.log('useAuth: Getting session...')
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error('useAuth: Session error:', error)
+          setLoading(false)
+          return
+        }
+
+        console.log('useAuth: Session data:', session?.user?.email || 'No session')
+        setUser(session?.user || null)
+        
+        if (session?.user) {
+          await fetchProfile(session.user.id)
+        }
+        
+        setLoading(false)
+      } catch (error) {
+        console.error('useAuth: Error getting session:', error)
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     getSession()
@@ -26,6 +43,7 @@ export const useAuth = () => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('useAuth: Auth state changed:', event, session?.user?.email || 'No user')
         setUser(session?.user || null)
         
         if (session?.user) {
@@ -33,6 +51,7 @@ export const useAuth = () => {
         } else {
           setProfile(null)
         }
+        
         setLoading(false)
       }
     )
@@ -42,25 +61,65 @@ export const useAuth = () => {
 
   const fetchProfile = async (userId) => {
     try {
+      console.log('useAuth: Fetching profile for user:', userId)
+      
       const { data, error } = await supabase
         .from('users_rp2025')
         .select('*')
         .eq('id', userId)
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('useAuth: Profile fetch error:', error)
+        // If profile doesn't exist, create it
+        if (error.code === 'PGRST116') {
+          console.log('useAuth: Creating new profile...')
+          await createProfile(userId)
+          return
+        }
+        throw error
+      }
+
+      console.log('useAuth: Profile fetched successfully')
       setProfile(data)
-      
+
       // Update last active
       await supabase.rpc('update_user_last_active', { user_uuid: userId })
     } catch (error) {
-      console.error('Error fetching profile:', error)
+      console.error('useAuth: Error fetching profile:', error)
+    }
+  }
+
+  const createProfile = async (userId) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      const { data, error } = await supabase
+        .from('users_rp2025')
+        .insert([{
+          id: userId,
+          email: user.email,
+          display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'User',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      console.log('useAuth: Profile created successfully')
+      setProfile(data)
+    } catch (error) {
+      console.error('useAuth: Error creating profile:', error)
     }
   }
 
   const signUp = async (email, password, displayName) => {
     try {
       setLoading(true)
+      console.log('useAuth: Signing up user:', email)
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -76,6 +135,7 @@ export const useAuth = () => {
       toast.success('账户创建成功！请检查邮箱验证链接。')
       return { data, error: null }
     } catch (error) {
+      console.error('useAuth: Sign up error:', error)
       toast.error(error.message)
       return { data: null, error }
     } finally {
@@ -86,6 +146,8 @@ export const useAuth = () => {
   const signIn = async (email, password) => {
     try {
       setLoading(true)
+      console.log('useAuth: Signing in user:', email)
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -96,6 +158,7 @@ export const useAuth = () => {
       toast.success('登录成功！')
       return { data, error: null }
     } catch (error) {
+      console.error('useAuth: Sign in error:', error)
       toast.error(error.message)
       return { data: null, error }
     } finally {
@@ -105,12 +168,14 @@ export const useAuth = () => {
 
   const signOut = async () => {
     try {
+      console.log('useAuth: Signing out...')
       const { error } = await supabase.auth.signOut()
       if (error) throw error
-      
+
       toast.success('已成功退出登录')
       navigate('/')
     } catch (error) {
+      console.error('useAuth: Sign out error:', error)
       toast.error(error.message)
     }
   }
@@ -133,6 +198,7 @@ export const useAuth = () => {
       toast.success('个人资料更新成功')
       return { error: null }
     } catch (error) {
+      console.error('useAuth: Update profile error:', error)
       toast.error(error.message)
       return { error }
     }
@@ -146,12 +212,15 @@ export const useAuth = () => {
         .rpc('get_user_stats', { user_uuid: user.id })
 
       if (error) throw error
+
       return data
     } catch (error) {
-      console.error('Error fetching user stats:', error)
+      console.error('useAuth: Error fetching user stats:', error)
       return null
     }
   }
+
+  console.log('useAuth: Current state - user:', !!user, 'loading:', loading)
 
   return {
     user,
