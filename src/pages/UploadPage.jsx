@@ -141,8 +141,8 @@ const UploadPage = () => {
     }
   }
 
-  const handleGeneratePrompts = async (templateParams) => {
-    console.log('开始生成提示词...', { currentDescription, templateParams })
+  const handleGeneratePrompts = async (templateParams, selectedModel = null) => {
+    console.log('开始生成提示词...', { currentDescription, templateParams, selectedModel })
 
     if (!currentDescription) {
       const errorMsg = '没有可用的描述来生成提示词。请先分析图像。'
@@ -165,21 +165,22 @@ const UploadPage = () => {
       const straicoService = new StraicoService(straicoKey)
       const apiStartTime = Date.now()
 
-      console.log('调用 generatePrompts，参数:', { description: currentDescription, templateParams })
-      const prompts = await straicoService.generatePrompts(currentDescription, templateParams)
+      console.log('调用 generatePrompts，参数:', { description: currentDescription, templateParams, selectedModel })
+      const prompts = await straicoService.generatePrompts(currentDescription, templateParams, selectedModel)
 
       // Log API usage
       if (user) {
         await logApiUsage({
           provider: 'straico',
-          endpoint: '/v0/prompt/completion',
+          endpoint: selectedModel ? '/v0/prompt/completion' : '/fallback',
           method: 'POST',
           creditsUsed: prompts.length || 0,
           responseTime: Date.now() - apiStartTime,
           success: true,
           requestData: {
             description: currentDescription,
-            templateParams: templateParams
+            templateParams: templateParams,
+            selectedModel: selectedModel
           },
           responseData: {
             prompts_generated: prompts.length
@@ -199,7 +200,7 @@ const UploadPage = () => {
           imageSize: currentImage.size,
           description: currentDescription,
           prompts: prompts,
-          templateParams: templateParams,
+          templateParams: { ...templateParams, selectedModel },
           tags: analysisData?.tags || [],
           colors: analysisData?.colors || [],
           analysisData: analysisData,
@@ -217,7 +218,8 @@ const UploadPage = () => {
           window.updateUserStats('history_count', 1)
         }
 
-        toast.success(`成功生成 ${prompts.length} 个 AI 艺术提示词！`)
+        const modelText = selectedModel ? ` using ${selectedModel.split('/')[1] || selectedModel}` : ''
+        toast.success(`成功生成 ${prompts.length} 个 AI 艺术提示词${modelText}！`)
       } else {
         throw new Error('未生成任何提示词')
       }
@@ -230,7 +232,7 @@ const UploadPage = () => {
       if (user) {
         await logApiUsage({
           provider: 'straico',
-          endpoint: '/v0/prompt/completion',
+          endpoint: selectedModel ? '/v0/prompt/completion' : '/fallback',
           method: 'POST',
           creditsUsed: 0,
           responseTime: Date.now() - Date.now(),
@@ -336,6 +338,7 @@ const UploadPage = () => {
                 onGeneratePrompts={handleGeneratePrompts}
                 isGenerating={isGenerating}
                 hasDescription={Boolean(currentDescription)}
+                apiKey={straicoKey}
               />
             </div>
           </div>

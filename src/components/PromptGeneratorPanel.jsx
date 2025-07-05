@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../common/SafeIcon';
 import { useSettingsStore } from '../store/useStore';
+import ModelSelector from './ModelSelector';
 
-const { FiZap, FiSettings, FiRefreshCw, FiCheck, FiX, FiEdit3 } = FiIcons;
+const { FiZap, FiSettings, FiRefreshCw, FiCheck, FiX, FiEdit3, FiCpu } = FiIcons;
 
-const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription }) => {
+const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription, apiKey }) => {
   const { defaultTemplateParams, setDefaultTemplateParams } = useSettingsStore();
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showManualPrompt, setShowManualPrompt] = useState(false);
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(null);
   const [templateParams, setTemplateParams] = useState({
     ...defaultTemplateParams,
     manualPrompt: defaultTemplateParams.manualPrompt || ''
@@ -24,6 +27,8 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
         setTemplateParams(prev => ({ ...prev, ...settings }));
         setShowAdvanced(settings.showAdvanced || false);
         setShowManualPrompt(settings.showManualPrompt || false);
+        setShowModelSelector(settings.showModelSelector || false);
+        setSelectedModel(settings.selectedModel || null);
         console.log('Loaded saved simple prompt settings:', settings);
       } catch (error) {
         console.error('Error loading saved settings:', error);
@@ -36,11 +41,13 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
     const settings = {
       ...templateParams,
       showAdvanced,
-      showManualPrompt
+      showManualPrompt,
+      showModelSelector,
+      selectedModel
     };
     localStorage.setItem('simple_prompt_settings', JSON.stringify(settings));
     console.log('Saved simple prompt settings:', settings);
-  }, [templateParams, showAdvanced, showManualPrompt]);
+  }, [templateParams, showAdvanced, showManualPrompt, showModelSelector, selectedModel]);
 
   const handleParamChange = (key, value) => {
     const newParams = { ...templateParams, [key]: value };
@@ -52,9 +59,13 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
     handleParamChange('manualPrompt', value);
   };
 
+  const handleModelSelect = (modelId) => {
+    setSelectedModel(modelId);
+  };
+
   const handleGenerate = () => {
-    console.log('生成提示词，参数:', templateParams);
-    onGeneratePrompts(templateParams);
+    console.log('生成提示词，参数:', { templateParams, selectedModel });
+    onGeneratePrompts(templateParams, selectedModel);
   };
 
   const paramOptions = {
@@ -80,6 +91,13 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
         </div>
         <div className="flex space-x-2">
           <button
+            onClick={() => setShowModelSelector(!showModelSelector)}
+            className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+          >
+            <SafeIcon icon={FiCpu} className="h-4 w-4" />
+            <span>Model</span>
+          </button>
+          <button
             onClick={() => setShowManualPrompt(!showManualPrompt)}
             className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors"
           >
@@ -104,48 +122,76 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
             {hasDescription ? 'Image Analyzed - Ready to Generate' : 'Please Analyze Image First'}
           </span>
         </div>
+        {selectedModel && (
+          <div className="flex items-center space-x-2 mt-2">
+            <SafeIcon icon={FiCpu} className="h-4 w-4 text-blue-600" />
+            <span className="text-sm text-blue-700">
+              Model: {selectedModel}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="space-y-4">
-        {/* Manual Prompt Input */}
-        {showManualPrompt && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="space-y-4 pb-4 border-b border-gray-200"
-          >
-            <div className="flex items-center space-x-2 mb-3">
-              <SafeIcon icon={FiEdit3} className="h-4 w-4 text-blue-600" />
-              <h4 className="font-medium text-gray-900">Manual Prompt Input</h4>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Prompt Instructions
-              </label>
-              <textarea
-                value={templateParams.manualPrompt || ''}
-                onChange={(e) => handleManualPromptChange(e.target.value)}
-                placeholder="Enter specific instructions for prompt generation. For example: 'Focus on lighting and composition', 'Emphasize realistic textures', 'Create cinematic atmosphere'..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                rows="4"
+        {/* Model Selection */}
+        <AnimatePresence>
+          {showModelSelector && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="border-b border-gray-200 pb-4"
+            >
+              <ModelSelector
+                apiKey={apiKey}
+                onModelSelect={handleModelSelect}
+                selectedModel={selectedModel}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                This will guide the AI model to generate prompts according to your specific requirements.
-              </p>
-            </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-            {/* Manual prompt preview */}
-            {templateParams.manualPrompt?.trim() && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <h5 className="text-sm font-medium text-blue-900 mb-2">Custom Instructions:</h5>
-                <p className="text-sm text-blue-700 break-words">
-                  {templateParams.manualPrompt}
+        {/* Manual Prompt Input */}
+        <AnimatePresence>
+          {showManualPrompt && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="space-y-4 pb-4 border-b border-gray-200"
+            >
+              <div className="flex items-center space-x-2 mb-3">
+                <SafeIcon icon={FiEdit3} className="h-4 w-4 text-blue-600" />
+                <h4 className="font-medium text-gray-900">Manual Prompt Input</h4>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Custom Prompt Instructions
+                </label>
+                <textarea
+                  value={templateParams.manualPrompt || ''}
+                  onChange={(e) => handleManualPromptChange(e.target.value)}
+                  placeholder="Enter specific instructions for prompt generation. For example: 'Focus on lighting and composition', 'Emphasize realistic textures', 'Create cinematic atmosphere'..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  rows="4"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This will guide the AI model to generate prompts according to your specific requirements.
                 </p>
               </div>
-            )}
-          </motion.div>
-        )}
+
+              {/* Manual prompt preview */}
+              {templateParams.manualPrompt?.trim() && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h5 className="text-sm font-medium text-blue-900 mb-2">Custom Instructions:</h5>
+                  <p className="text-sm text-blue-700 break-words">
+                    {templateParams.manualPrompt}
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Basic Parameters */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -184,97 +230,99 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
         </div>
 
         {/* Advanced Parameters */}
-        {showAdvanced && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="space-y-4 pt-4 border-t border-gray-200"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tone
-                </label>
-                <select
-                  value={templateParams.tone}
-                  onChange={(e) => handleParamChange('tone', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  {paramOptions.tone.map(option => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+        <AnimatePresence>
+          {showAdvanced && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="space-y-4 pt-4 border-t border-gray-200"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tone
+                  </label>
+                  <select
+                    value={templateParams.tone}
+                    onChange={(e) => handleParamChange('tone', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    {paramOptions.tone.map(option => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Artistic Style
+                  </label>
+                  <select
+                    value={templateParams.artisticStyle}
+                    onChange={(e) => handleParamChange('artisticStyle', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    {paramOptions.artisticStyle.map(option => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Mood
+                  </label>
+                  <select
+                    value={templateParams.mood}
+                    onChange={(e) => handleParamChange('mood', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    {paramOptions.mood.map(option => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Lighting
+                  </label>
+                  <select
+                    value={templateParams.lighting}
+                    onChange={(e) => handleParamChange('lighting', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    {paramOptions.lighting.map(option => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Composition
+                  </label>
+                  <select
+                    value={templateParams.composition}
+                    onChange={(e) => handleParamChange('composition', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    {paramOptions.composition.map(option => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Artistic Style
-                </label>
-                <select
-                  value={templateParams.artisticStyle}
-                  onChange={(e) => handleParamChange('artisticStyle', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  {paramOptions.artisticStyle.map(option => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mood
-                </label>
-                <select
-                  value={templateParams.mood}
-                  onChange={(e) => handleParamChange('mood', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  {paramOptions.mood.map(option => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Lighting
-                </label>
-                <select
-                  value={templateParams.lighting}
-                  onChange={(e) => handleParamChange('lighting', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  {paramOptions.lighting.map(option => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Composition
-                </label>
-                <select
-                  value={templateParams.composition}
-                  onChange={(e) => handleParamChange('composition', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  {paramOptions.composition.map(option => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Generate Button */}
         <button
@@ -291,6 +339,7 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
             <>
               <SafeIcon icon={FiZap} className="h-5 w-5" />
               <span>Generate AI Art Prompts</span>
+              {selectedModel && <span className="text-purple-200">({selectedModel.split('/')[1] || selectedModel})</span>}
             </>
           )}
         </button>
@@ -312,6 +361,11 @@ const PromptGeneratorPanel = ({ onGeneratePrompts, isGenerating, hasDescription 
             {templateParams.manualPrompt?.trim() && (
               <p className="text-sm text-green-700 mt-1">
                 🎯 <strong>Custom Instructions:</strong> Prompts will be generated according to your specific requirements.
+              </p>
+            )}
+            {selectedModel && (
+              <p className="text-sm text-green-700 mt-1">
+                🤖 <strong>AI Model:</strong> Using {selectedModel} for enhanced prompt generation.
               </p>
             )}
           </div>

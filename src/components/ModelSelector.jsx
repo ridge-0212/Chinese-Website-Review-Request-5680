@@ -24,7 +24,6 @@ const ModelSelector = ({ apiKey, onModelSelect, selectedModel }) => {
   const loadModels = async () => {
     setLoading(true);
     setError(null);
-    
     try {
       const availableModels = await straicoService.getAvailableModels();
       setModels(availableModels);
@@ -52,12 +51,12 @@ const ModelSelector = ({ apiKey, onModelSelect, selectedModel }) => {
     if (filterProvider !== 'all') {
       filteredModels = models.filter(model => model.provider === filterProvider);
     }
-    
+
     return filteredModels.sort((a, b) => {
       switch (sortBy) {
         case 'name':
           return a.name.localeCompare(b.name);
-        case 'provider':
+        case 'provider': 
           return a.provider.localeCompare(b.provider);
         case 'price':
           return (a.pricing?.coins || 0) - (b.pricing?.coins || 0);
@@ -137,7 +136,6 @@ const ModelSelector = ({ apiKey, onModelSelect, selectedModel }) => {
               ))}
             </select>
           </div>
-          
           <div className="flex-1 min-w-0">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Sort by
@@ -159,9 +157,8 @@ const ModelSelector = ({ apiKey, onModelSelect, selectedModel }) => {
       {models.length > 0 ? (
         <div className="space-y-3">
           <p className="text-sm text-gray-600 mb-4">
-            Select the AI model you want to use for RAG queries ({getSortedAndFilteredModels().length} models available):
+            Select the AI model you want to use for prompt generation ({getSortedAndFilteredModels().length} models available):
           </p>
-          
           <div className="grid gap-3">
             {getSortedAndFilteredModels().map((model) => (
               <button
@@ -181,9 +178,7 @@ const ModelSelector = ({ apiKey, onModelSelect, selectedModel }) => {
                         {model.provider}
                       </span>
                     </div>
-                    
                     <p className="text-sm text-gray-600 mb-2">{model.description}</p>
-                    
                     <div className="flex items-center space-x-4 text-xs text-gray-500">
                       <div className="flex items-center space-x-1">
                         <SafeIcon icon={FiDollarSign} className="h-3 w-3" />
@@ -194,10 +189,8 @@ const ModelSelector = ({ apiKey, onModelSelect, selectedModel }) => {
                         <span>Max: {formatOutput(model.maxOutput)}</span>
                       </div>
                     </div>
-                    
                     <p className="text-xs text-gray-400 mt-1 font-mono">{model.id}</p>
                   </div>
-                  
                   {selectedModel === model.id && (
                     <SafeIcon icon={FiCheck} className="h-5 w-5 text-blue-600 flex-shrink-0" />
                   )}
@@ -224,8 +217,8 @@ const ModelSelector = ({ apiKey, onModelSelect, selectedModel }) => {
       <div className="mt-6 p-4 bg-gray-50 rounded-lg">
         <h3 className="font-medium text-gray-900 mb-2">About Model Selection</h3>
         <p className="text-sm text-gray-600">
-          Different models excel at different tasks. Consider cost, context length, and performance 
-          when choosing. Higher coin costs typically indicate more capable models.
+          Different models excel at different tasks. Consider cost, context length, and performance when choosing. 
+          Higher coin costs typically indicate more capable models.
         </p>
       </div>
     </motion.div>
