@@ -5,14 +5,15 @@ import * as FiIcons from 'react-icons/fi'
 import SafeIcon from '../common/SafeIcon'
 import { useAuth } from '../hooks/useAuth'
 
-const { FiZap, FiUpload, FiClock, FiSettings, FiUser, FiLogOut } = FiIcons
+const { FiZap, FiUpload, FiShoppingBag, FiClock, FiSettings, FiUser, FiLogOut } = FiIcons
 
 const Navbar = () => {
   const location = useLocation()
   const { user, profile, signOut } = useAuth()
 
   const navItems = [
-    { path: '/', label: '上传', icon: FiUpload },
+    { path: '/', label: 'AI 提示词', icon: FiUpload },
+    { path: '/product', label: '电商产品', icon: FiShoppingBag },
     { path: '/history', label: '历史', icon: FiClock },
     { path: '/settings', label: '设置', icon: FiSettings },
     { path: '/profile', label: '个人资料', icon: FiUser }
@@ -28,8 +29,8 @@ const Navbar = () => {
               <SafeIcon icon={FiZap} className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">智能提示词生成器</h1>
-              <p className="text-xs text-gray-500">AI 艺术提示词生成工具</p>
+              <h1 className="text-xl font-bold text-gray-900">智能内容生成器</h1>
+              <p className="text-xs text-gray-500">AI 提示词 & 电商产品内容生成工具</p>
             </div>
           </Link>
 
@@ -85,7 +86,6 @@ const Navbar = () => {
                     <p className="text-xs text-gray-500">{user.email}</p>
                   </div>
                 </div>
-                
                 <button
                   onClick={signOut}
                   className="flex items-center space-x-1 px-3 py-1.5 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"

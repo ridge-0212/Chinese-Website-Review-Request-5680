@@ -8,6 +8,7 @@ import { useAuth } from './hooks/useAuth'
 import { useSupabaseHistoryStore, useSupabaseSettingsStore } from './store/useSupabaseStore'
 import AuthGuard from './components/AuthGuard'
 import UploadPage from './pages/UploadPage'
+import ProductPage from './pages/ProductPage'
 import HistoryPage from './pages/HistoryPage'
 import SettingsPage from './pages/SettingsPage'
 import UserProfile from './components/UserProfile'
@@ -26,6 +27,7 @@ function App() {
           <main className="container mx-auto px-4 py-8">
             <Routes>
               <Route path="/" element={<UploadPage />} />
+              <Route path="/product" element={<ProductPage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/profile" element={<UserProfile />} />
